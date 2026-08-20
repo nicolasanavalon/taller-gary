@@ -46,6 +46,7 @@
   nav .ic{font-size:15px}
 
   main{padding:24px 18px;max-width:1120px;margin:0 auto}
+  main.prod-main{max-width:none;width:100%;box-sizing:border-box;padding-left:28px;padding-right:28px}
 
   /* ---------- GLASS BASE ---------- */
   .glass{background:var(--glass);-webkit-backdrop-filter:blur(16px) saturate(1.3);backdrop-filter:blur(16px) saturate(1.3);
@@ -240,6 +241,11 @@
     font-size:12.5px;font-family:inherit;background:transparent}
   .prod-table input:hover{border-color:var(--line)}
   .prod-table input:focus{border-color:var(--gold);background:#fff}
+  .prod-table textarea.prod-ta{width:100%;border:1px solid transparent;border-radius:7px;padding:4px 6px;
+    font-size:12.5px;font-family:inherit;background:transparent;resize:none;overflow-y:auto;
+    height:32px;line-height:1.3;display:block}
+  .prod-table textarea.prod-ta:hover{border-color:var(--line)}
+  .prod-table textarea.prod-ta:focus{border-color:var(--gold);background:#fff;outline:none}
   .prod-table td.num input{text-align:center}
   .prod-thumb-cell{width:52px;height:38px;border-radius:8px;overflow:hidden;cursor:pointer;border:1px dashed var(--gold-line);
     display:flex;align-items:center;justify-content:center;background:#fdfaf3}
@@ -457,7 +463,7 @@ function badge(status){
 /* ============================ RENDER ============================ */
 function render(){
   const app=document.getElementById('app');
-  app.className = '';
+  app.className = current==='produccion' ? 'prod-main' : '';
   if(current==='inicio'){ app.innerHTML=renderInicio(); bindCards(); return; }
   const m=MODULES.find(x=>x.id===current);
   app.innerHTML=renderModule(m);
@@ -2292,18 +2298,18 @@ function prodFilaHtml(r, sep){
   return `<tr class="${r.entregada?'entregada':''} ${sel?'sel':''} ${sep?'grupo-sep':''}">
     <td><input type="checkbox" ${sel?'checked':''} onchange="prodToggleSeleccion('${r.uid}')"></td>
     <td><input value="${esc(r.ot)}" oninput="prodInput(this,'${r.uid}','ot')" style="width:64px"></td>
-    <td><input value="${esc(r.cliente)}" oninput="prodInput(this,'${r.uid}','cliente')" style="width:120px"></td>
+    <td><textarea class="prod-ta" rows="2" oninput="prodInput(this,'${r.uid}','cliente')" style="width:120px">${esc(r.cliente)}</textarea></td>
     <td><input value="${esc(r.comuna)}" oninput="prodInput(this,'${r.uid}','comuna')" style="width:100px"></td>
     <td><input type="date" value="${esc(r.fCom)}" oninput="prodInputFecha(this,'${r.uid}')" style="width:132px"></td>
     <td id="dif-${r.uid}">${difHtml}</td>
     <td>${prodThumbHtml(r)}</td>
-    <td><input value="${esc(r.producto)}" oninput="prodInput(this,'${r.uid}','producto')" style="width:160px"></td>
+    <td><textarea class="prod-ta" rows="2" oninput="prodInput(this,'${r.uid}','producto')" style="width:160px">${esc(r.producto)}</textarea></td>
     <td><input value="${esc(r.medida)}" oninput="prodInput(this,'${r.uid}','medida')" style="width:90px"></td>
     <td><input value="${esc(r.tela)}" oninput="prodInput(this,'${r.uid}','tela')" style="width:90px"></td>
     <td class="num"><input value="${esc(r.cant)}" oninput="prodInput(this,'${r.uid}','cant')" style="width:46px"></td>
     <td class="tiny"><button class="prod-toggle-mini ${r.sublimacion?'on':''}" title="Subli" onclick="prodToggleFlag('${r.uid}','sublimacion')">${r.sublimacion?'✓':''}</button></td>
     <td class="tiny"><button class="prod-toggle-mini ${r.aplicada?'on':''}" title="Apli" onclick="prodToggleFlag('${r.uid}','aplicada')">${r.aplicada?'✓':''}</button></td>
-    <td><input value="${esc(r.obs)}" oninput="prodInput(this,'${r.uid}','obs')" style="width:150px"></td>
+    <td><textarea class="prod-ta" rows="2" oninput="prodInput(this,'${r.uid}','obs')" style="width:150px">${esc(r.obs)}</textarea></td>
     <td><input value="${esc(r.etapa)}" oninput="prodInput(this,'${r.uid}','etapa')" style="width:130px" placeholder="Status"></td>
     <td>${prodAnexoHtml(r)}</td>
     <td><div class="prod-row-actions">
