@@ -2169,6 +2169,7 @@ function saveProduccion(){
   prodSyncTimer=setTimeout(prodEnviarNube, 900);
 }
 function prodEnviarNube(){
+  prodSyncTimer=null; // el envío ya está en curso; deja de bloquear las lecturas
   fetch(PROD_SYNC_URL, {
     method:'POST',
     headers:{'Content-Type':'text/plain;charset=utf-8'},
@@ -2183,15 +2184,23 @@ function prodEnviarNube(){
   });
 }
 async function prodSincronizarAhora(silencioso){
+  if(prodSyncTimer){
+    // Hay un cambio local recién hecho, todavía por subir — no lo pisemos trayendo una
+    // lectura vieja de la nube. Se reintenta solo apenas termine de subir (ver prodEnviarNube).
+    if(!silencioso) toast('Hay un cambio sin guardar todavía, espera un segundo…');
+    return;
+  }
   try{
     const res=await fetch(PROD_SYNC_URL, {cache:'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const remoto=await res.json();
+    if(prodSyncTimer) return; // mientras esperábamos la respuesta, se hizo una edición local — no la pisemos
     const n=(remoto.rows||[]).length;
-    prodFusionarRemoto(remoto);
+    const huboNuevas=prodFusionarRemoto(remoto);
     prodSyncEstado='nube'; prodSyncDetalle=''; prodActualizarPildoraSync();
     if(current==='produccion') render();
-    saveProduccion(); // por si el merge trajo filas nuevas (ej. una OT que agregué yo) que aún no están en la nube
+    if(huboNuevas) saveProduccion(); // solo si el merge trajo filas nuevas (ej. una OT que agregué yo) que aún no están en la nube
+    else localStorage.setItem(KEY_PRODUCCION, JSON.stringify(PRODUCCION));
     if(!silencioso) toast('Sincronizado: '+n+' fila(s) desde la nube.');
   }catch(e){
     console.error('No se pudo leer desde la nube:', e);
@@ -2200,18 +2209,20 @@ async function prodSincronizarAhora(silencioso){
   }
 }
 function prodFusionarRemoto(remoto){
-  if(!remoto || !Array.isArray(remoto.rows)) return;
+  if(!remoto || !Array.isArray(remoto.rows)) return false;
   PRODUCCION={
     seq: Math.max(PRODUCCION.seq||1, remoto.seq||1),
     rows: remoto.rows,
     removedSeeds: remoto.removedSeeds || PRODUCCION.removedSeeds || [],
   };
   const existentes=new Set(PRODUCCION.rows.map(r=>r.uid));
+  let huboNuevas=false;
   SEED_ROWS.forEach(sr=>{
-    if(!existentes.has(sr.uid) && !PRODUCCION.removedSeeds.includes(sr.uid)) PRODUCCION.rows.push({...sr});
+    if(!existentes.has(sr.uid) && !PRODUCCION.removedSeeds.includes(sr.uid)){ PRODUCCION.rows.push({...sr}); huboNuevas=true; }
   });
   normalizarProduccion(PRODUCCION);
   localStorage.setItem(KEY_PRODUCCION, JSON.stringify(PRODUCCION));
+  return huboNuevas;
 }
 if(!prodSyncPoll) prodSyncPoll=setInterval(()=>{ if(current==='produccion') prodSincronizarAhora(true); }, 20000);
 let PRODUCCION = loadProduccion();
