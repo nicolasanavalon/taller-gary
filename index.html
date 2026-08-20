@@ -210,6 +210,7 @@
   .prod-head .sub{color:var(--muted);font-size:13px;margin-top:3px}
   .prod-cloud-pill{display:inline-block;margin-top:6px;cursor:pointer}
   .prod-cloud-pill.cargando{color:var(--gold-d)}
+  .prod-cloud-pill.guardando{color:var(--gold-d);background:var(--gold-soft);border-color:var(--gold-line)}
   .prod-cloud-pill.nube{color:#157a4b;background:rgba(31,157,99,.14);border-color:rgba(31,157,99,.3)}
   .prod-cloud-pill.nube-error{color:#a83226;background:rgba(212,72,61,.12);border-color:rgba(212,72,61,.28)}
   .prod-cloud-pill.no-disponible{color:var(--muted);background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.1)}
@@ -3087,23 +3088,25 @@ function loadProduccion(){
 const PROD_SYNC_URL='https://script.google.com/macros/s/AKfycbwAACl5LecQlRplOQqxINxjcPsoppWspspEyBN3xmsr2o7lrzMFhc6-1m-qydVLUrgP/exec';
 let prodSyncTimer=null;
 let prodSyncPoll=null;
-/* 'cargando' | 'nube' | 'nube-error' */
+/* 'cargando' | 'guardando' | 'nube' | 'nube-error' */
 let prodSyncEstado='cargando';
 let prodSyncDetalle='';
 function prodActualizarPildoraSync(){
   const el=document.getElementById('prodSyncPill');
   if(!el) return;
-  const txt={ cargando:'☁️ Conectando…', nube:'☁️ Sincronizado', 'nube-error':'⚠️ Error: '+prodSyncDetalle }[prodSyncEstado];
+  const txt={ cargando:'☁️ Conectando…', guardando:'💾 Guardando…', nube:'☁️ Sincronizado', 'nube-error':'⚠️ Error: '+prodSyncDetalle }[prodSyncEstado];
   el.textContent=txt;
   el.className='pill prod-cloud-pill '+prodSyncEstado;
 }
 function saveProduccion(){
   localStorage.setItem(KEY_PRODUCCION, JSON.stringify(PRODUCCION));
+  prodSyncEstado='guardando'; prodActualizarPildoraSync();
   clearTimeout(prodSyncTimer);
-  prodSyncTimer=setTimeout(prodEnviarNube, 900);
+  prodSyncTimer=setTimeout(()=>prodEnviarNube(0), 900);
 }
-function prodEnviarNube(){
+function prodEnviarNube(intento){
   prodSyncTimer=null; // el envío ya está en curso; deja de bloquear las lecturas
+  prodSyncEstado='guardando'; prodActualizarPildoraSync();
   fetch(PROD_SYNC_URL, {
     method:'POST',
     headers:{'Content-Type':'text/plain;charset=utf-8'},
@@ -3113,8 +3116,13 @@ function prodEnviarNube(){
     prodSyncEstado='nube'; prodSyncDetalle=''; prodActualizarPildoraSync();
   }).catch(e=>{
     console.error('No se pudo guardar en la nube:', e);
+    if((intento||0)<2){
+      // Reintenta un par de veces antes de avisar — puede ser solo un corte de red momentáneo.
+      setTimeout(()=>prodEnviarNube((intento||0)+1), 2000);
+      return;
+    }
     prodSyncEstado='nube-error'; prodSyncDetalle=String(e&&e.message||e); prodActualizarPildoraSync();
-    toast('No se pudo guardar en la nube.', 'error');
+    toast('No se pudo guardar en la nube. Revisa tu conexión — el cambio queda solo en este navegador por ahora.', 'error');
   });
 }
 async function prodSincronizarAhora(silencioso){
