@@ -231,7 +231,7 @@
   .prod-bulkbar b{color:var(--gold-d)}
   .prod-table-wrap{overflow-x:auto;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line);background:#fff}
   table.prod-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1180px}
-  .prod-table thead th{position:sticky;top:0;background:#faf7ef;color:var(--muted);font-weight:700;font-size:10.5px;
+  .prod-table thead th{position:sticky;top:145px;background:#faf7ef;color:var(--muted);font-weight:700;font-size:10.5px;
     text-transform:uppercase;letter-spacing:.3px;text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   .prod-table td{padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
   .prod-table tr:last-child td{border-bottom:none}
@@ -267,7 +267,7 @@
   .prod-empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:13px}
   .prod-lightbox{position:fixed;inset:0;background:rgba(20,15,5,.72);z-index:220;display:flex;align-items:center;justify-content:center;padding:24px}
   .prod-lightbox img{max-width:92vw;max-height:78vh;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
-  .prod-table tr.grupo-sep td{border-top:2px solid var(--gold-line)}
+  .prod-table tr.grupo-sep td{border-top:3px solid var(--gold-d)}
   .ot-doc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
   .ot-doc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px;margin-bottom:16px}
   .ot-doc-grid label{margin-bottom:2px}
@@ -3056,13 +3056,13 @@ function seedProduccion(){ return {seq:1, rows:[], removedSeeds:[]}; }
 function normalizarProduccion(data){
   data.rows.forEach(r=>{
     if(r.aplicada==null) r.aplicada=false;
+    // Solo se completa el anexo si la fila NUNCA tuvo uno — jamás se pisa un dato que
+    // el usuario ya haya editado (fecha, obs, foto, anexo, lo que sea).
     if(r.anexos===undefined){
       if(r.ot==='1480') r.anexos=[{id:'ot-1480', nombre:'OT 1480.xlsx', tipo:'hoja', hoja:PXSHEET_1480}];
       else if(r.ot==='1474') r.anexos=[{id:'ot-1474', nombre:'OT 1474.xlsx', tipo:'hoja', hoja:PXSHEET_1474}];
       else r.anexos=[];
     }
-    if(r.ot==='1480'){ r.fCom='2026-08-14'; r.obs=''; }
-    delete r.otDoc; delete r.archivoImg;
   });
 }
 function loadProduccion(){
@@ -3265,7 +3265,11 @@ function renderProduccion(m){
     ${prodStatsHtml()}
 
     <div class="prod-toolbar">
-      <input class="search" type="text" placeholder="Buscar OT, cliente, comuna, producto, etapa…" value="${esc(prodBusqueda)}" oninput="prodBuscar(this.value)">
+      <input class="search" type="text" placeholder="Buscar OT, cliente, comuna, producto, o texto en Status (ej. Letti)…" value="${esc(prodBusqueda)}" oninput="prodBuscar(this.value)">
+      <div class="prod-tabs">
+        <button class="${prodStatFiltro==='sublim'?'active':''}" onclick="prodFiltrarStat('sublim')" title="Solo filas marcadas Subli">Subli</button>
+        <button class="${prodStatFiltro==='aplicado'?'active':''}" onclick="prodFiltrarStat('aplicado')" title="Solo filas marcadas Apli">Apli</button>
+      </div>
       <div class="prod-tabs">
         <button class="${prodTab==='vigentes'?'active':''}" onclick="prodCambiarTab('vigentes')">Vigentes</button>
         <button class="${prodTab==='entregadas'?'active':''}" onclick="prodCambiarTab('entregadas')">Entregadas</button>
