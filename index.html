@@ -3117,28 +3117,43 @@ function saveProduccion(){
   clearTimeout(prodSyncTimer);
   prodSyncTimer=setTimeout(prodEnviarNube, 900);
 }
-/* Nunca manda dos guardados a la vez: si ya hay uno viajando (ej. con una foto pesada, en
-   señal débil) y editas algo más mientras tanto, ese cambio espera y se manda apenas el
-   primero termine — así el guardado más lento nunca puede llegar después y pisar al más
-   nuevo (que era la causa de que fotos/datos "desaparecieran"). */
+/* Nunca manda dos guardados a la vez, y nunca sube un cambio más viejo que lo que ya hay
+   guardado: cada guardado incluye "_ifRev" (la última versión que este navegador vio). Si
+   el servidor ya tiene una versión más nueva (porque otra pestaña/dispositivo guardó algo
+   mientras tanto), RECHAZA el guardado en vez de pisarlo, y este navegador adopta esa
+   versión más nueva antes de reintentar. Así ninguna pestaña "atrasada" puede volver a
+   borrar trabajo reciente — que fue exactamente lo que pasó hoy. */
 async function prodEnviarNube(){
   prodSyncTimer=null;
   if(prodEnviando){ prodEnviarPendiente=true; prodSyncEstado='guardando'; prodActualizarPildoraSync(); return; }
   prodEnviando=true;
   prodSyncEstado='guardando'; prodActualizarPildoraSync();
-  let ok=false, ultimoError=null;
-  for(let intento=0; intento<3 && !ok; intento++){
+  let ok=false, ultimoError=null, conflicto=null;
+  for(let intento=0; intento<3 && !ok && !conflicto; intento++){
     if(intento>0) await new Promise(res=>setTimeout(res,2000));
     try{
-      const body=JSON.stringify(PRODUCCION); // siempre el estado más reciente, en cada intento
+      const payload=Object.assign({}, PRODUCCION, {_ifRev: PRODUCCION._rev});
+      const body=JSON.stringify(payload); // siempre el estado más reciente, en cada intento
       const r=await fetch(PROD_SYNC_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body});
       if(!r.ok) throw new Error('HTTP '+r.status);
+      const data=await r.json();
+      if(data && data.conflict){ conflicto=data.current; break; }
+      if(data && typeof data.rev==='number') PRODUCCION._rev=data.rev;
       ok=true;
     }catch(e){ ultimoError=e; console.error('No se pudo guardar en la nube:', e); }
   }
   prodEnviando=false;
-  if(ok){ prodSyncEstado='nube'; prodSyncDetalle=''; }
-  else{
+  if(conflicto){
+    // Alguien más guardó algo más nuevo mientras tanto: adoptamos esa versión real y avisamos,
+    // en vez de arriesgarnos a pisarla.
+    prodFusionarRemoto(conflicto);
+    if(current==='produccion') render();
+    prodSyncEstado='nube'; prodSyncDetalle='';
+    toast('Otra pestaña o dispositivo guardó algo más nuevo — se actualizó esta vista. Revisa y vuelve a hacer tu cambio si hace falta.', 'error');
+  } else if(ok){
+    prodSyncEstado='nube'; prodSyncDetalle='';
+    localStorage.setItem(KEY_PRODUCCION, JSON.stringify(PRODUCCION));
+  } else{
     prodSyncEstado='nube-error'; prodSyncDetalle=String(ultimoError&&ultimoError.message||ultimoError);
     toast('No se pudo guardar en la nube. Revisa tu conexión — el cambio queda solo en este navegador por ahora.', 'error');
   }
@@ -3176,6 +3191,7 @@ function prodFusionarRemoto(remoto){
     seq: Math.max(PRODUCCION.seq||1, remoto.seq||1),
     rows: remoto.rows,
     removedSeeds: remoto.removedSeeds || PRODUCCION.removedSeeds || [],
+    _rev: remoto._rev||0,
   };
   const existentes=new Set(PRODUCCION.rows.map(r=>r.uid));
   let huboNuevas=false;
@@ -3188,8 +3204,15 @@ function prodFusionarRemoto(remoto){
 }
 if(!prodSyncPoll) prodSyncPoll=setInterval(()=>{ if(current==='produccion') prodSincronizarAhora(true); }, 20000);
 let PRODUCCION = loadProduccion();
+// OJO: nunca se guarda/publica nada acá al cargar la página — solo se lee. La carga local
+// (localStorage) sirve de vista instantánea mientras se trae lo real de la nube arriba.
 prodSincronizarAhora(true);
-saveProduccion();
+let prodCompacto=localStorage.getItem('taller_gary_prod_compacto')==='1'; // oculta título+stats para que la tabla use más pantalla
+function prodToggleCompacto(){
+  prodCompacto=!prodCompacto;
+  localStorage.setItem('taller_gary_prod_compacto', prodCompacto?'1':'0');
+  render();
+}
 let prodTab='vigentes';        // 'vigentes' | 'entregadas' | 'todo'
 let prodBusqueda='';
 let prodStatFiltro=null;       // 'atrasados' | 'aldia' | 'aplicado' | 'sublim' | null
@@ -3280,6 +3303,7 @@ function prodFilasHtml(rows){
 function renderProduccion(m){
   const rows=prodRowsVista();
   return `
+    ${prodCompacto? '' : `
     <div class="backlink" onclick="go('inicio')">← Volver al inicio</div>
     <div class="prod-head">
       <div><h1>${m.icon} ${m.title}</h1><div class="sub">${m.desc}</div>
@@ -3293,6 +3317,11 @@ function renderProduccion(m){
     </div>
 
     ${prodStatsHtml()}
+    `}
+
+    <div class="row" style="justify-content:flex-end;margin-bottom:6px">
+      <button class="btn ghost sm" onclick="prodToggleCompacto()">${prodCompacto?'🔽 Mostrar título y estadísticas':'🔼 Ocultar título y estadísticas'}</button>
+    </div>
 
     <div class="prod-toolbar">
       <input class="search" type="text" placeholder="Buscar OT, cliente, comuna, producto, o texto en Status (ej. Letti)…" value="${esc(prodBusqueda)}" oninput="prodBuscar(this.value)">
