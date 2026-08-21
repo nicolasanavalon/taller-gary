@@ -271,6 +271,9 @@
   .prod-lightbox{position:fixed;inset:0;background:rgba(20,15,5,.72);z-index:220;display:flex;align-items:center;justify-content:center;padding:24px}
   .prod-lightbox img{max-width:92vw;max-height:78vh;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
   .prod-table tr.grupo-sep td{border-top:3px solid var(--gold-d)}
+  .prod-table th.prod-col-freeze,.prod-table td.prod-col-freeze{position:sticky;left:0;z-index:1;background:#fff;box-shadow:2px 0 5px rgba(0,0,0,.10)}
+  .prod-table thead th.prod-col-freeze{z-index:3;background:#faf7ef}
+  .prod-table tr.sel td.prod-col-freeze{background:var(--gold-soft)}
   .ot-doc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
   .ot-doc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px;margin-bottom:16px}
   .ot-doc-grid label{margin-bottom:2px}
@@ -3370,7 +3373,7 @@ function prodFilaHtml(r, sep){
     <td><input value="${esc(r.comuna)}" oninput="prodInput(this,'${r.uid}','comuna')" style="width:100px"></td>
     <td><input type="date" value="${esc(r.fCom)}" oninput="prodInputFecha(this,'${r.uid}')" style="width:132px"></td>
     <td id="dif-${r.uid}">${difHtml}</td>
-    <td>${prodThumbHtml(r)}</td>
+    <td class="prod-col-freeze">${prodThumbHtml(r)}</td>
     <td><textarea class="prod-ta" rows="2" oninput="prodInput(this,'${r.uid}','producto')" style="width:160px">${esc(r.producto)}</textarea></td>
     <td><input value="${esc(r.medida)}" oninput="prodInput(this,'${r.uid}','medida')" style="width:90px"></td>
     <td><input value="${esc(r.tela)}" oninput="prodInput(this,'${r.uid}','tela')" style="width:90px"></td>
@@ -3438,7 +3441,7 @@ function renderProduccion(m){
       <table class="prod-table">
         <thead><tr>
           <th style="width:26px"></th>
-          <th>ID</th><th>Cliente</th><th>Comuna</th><th>F. Comp.</th><th>Dif</th><th>Foto</th>
+          <th>ID</th><th>Cliente</th><th>Comuna</th><th>F. Comp.</th><th>Dif</th><th class="prod-col-freeze">Foto</th>
           <th>Producto</th><th>Medida</th><th>Tela</th><th>Cant</th><th class="tiny">Subli</th><th class="tiny">Apli</th><th>Obs</th><th>Status</th><th>Anexo</th><th></th>
         </tr></thead>
         <tbody>${rows.length? prodFilasHtml(rows) : prodEmptyRowHtml()}</tbody>
