@@ -469,13 +469,24 @@ function render(){
   app.className = current==='produccion' ? 'prod-main' : '';
   if(current==='inicio'){ app.innerHTML=renderInicio(); bindCards(); return; }
   const m=MODULES.find(x=>x.id===current);
+  // Reemplazar el HTML de la tabla de Producción borra el scroll (de la página y del
+  // cuadro de la tabla). Se guarda antes y se repone después para que una acción dentro
+  // de la tabla (marcar Subli, subir una foto, etc.) no "salte" al principio.
+  const wrapAntes=document.querySelector('.prod-table-wrap');
+  const scrollWrap=wrapAntes?wrapAntes.scrollTop:null;
+  const scrollY=window.scrollY;
   app.innerHTML=renderModule(m);
   if(current==='costos'){
     if(costosView==='detalle') bindDetalleCotizacion();
     else bindCostosForm();
   }
   if(current==='mercado') bindMercadoForm();
-  if(current==='produccion') bindProduccion();
+  if(current==='produccion'){
+    bindProduccion();
+    const wrapDespues=document.querySelector('.prod-table-wrap');
+    if(wrapDespues && scrollWrap!=null) wrapDespues.scrollTop=scrollWrap;
+    window.scrollTo(0, scrollY);
+  }
 }
 
 function renderInicio(){
@@ -3445,10 +3456,27 @@ function prodAbrirAnexo(uid){
   bg.querySelector('#alAgregar').onclick=()=>{ bg.remove(); prodSubirAnexo(uid); };
   bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
 }
+/* Los anexos son del pedido (OT) completo, no de un solo producto: se agregan/quitan en
+   TODAS las filas que compartan el mismo número de OT, para que aparezcan en cualquiera
+   de sus productos. */
+function prodAgregarAnexoATodaOT(ot, anexo){
+  PRODUCCION.rows.forEach(x=>{
+    if(x.ot!==ot) return;
+    if(!x.anexos) x.anexos=[];
+    x.anexos.push(anexo);
+  });
+}
+function prodQuitarAnexoDeTodaOT(ot, anexoId){
+  PRODUCCION.rows.forEach(x=>{
+    if(x.ot!==ot || !x.anexos) return;
+    x.anexos=x.anexos.filter(a=>a.id!==anexoId);
+  });
+}
 function prodQuitarAnexo(uid, idx){
   const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r || !r.anexos) return;
-  confirmDialog('¿Quitar este anexo?', ()=>{
-    r.anexos.splice(idx,1); saveProduccion();
+  const anexo=r.anexos[idx]; if(!anexo) return;
+  confirmDialog('¿Quitar este anexo? Se quita de todos los productos de esta OT.', ()=>{
+    prodQuitarAnexoDeTodaOT(r.ot, anexo.id); saveProduccion();
     document.querySelector('.confirm-bg')?.remove();
     prodAbrirAnexo(uid);
   });
@@ -3516,19 +3544,20 @@ function prodSubirAnexo(uid){
   input.onchange=()=>{
     const f=input.files[0]; if(!f) return;
     const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
-    if(!r.anexos) r.anexos=[];
     if(f.type==='application/pdf'){
       if(f.size>4*1024*1024){ toast('El PDF es muy pesado (máx. 4MB).','error'); return; }
       const reader=new FileReader();
       reader.onload=()=>{
-        r.anexos.push({id:'a'+Date.now(), nombre:f.name||'Anexo.pdf', tipo:'pdf', dataUrl:reader.result});
-        saveProduccion(); render(); toast('Anexo agregado.');
+        const anexo={id:'a'+Date.now(), nombre:f.name||'Anexo.pdf', tipo:'pdf', dataUrl:reader.result};
+        prodAgregarAnexoATodaOT(r.ot, anexo);
+        saveProduccion(); render(); toast('Anexo agregado a toda la OT '+r.ot+'.');
       };
       reader.readAsDataURL(f);
     } else {
       comprimirAnexoImagen(f, dataUrl=>{
-        r.anexos.push({id:'a'+Date.now(), nombre:f.name||'Foto', tipo:'imagen', dataUrl});
-        saveProduccion(); render(); toast('Anexo agregado.');
+        const anexo={id:'a'+Date.now(), nombre:f.name||'Foto', tipo:'imagen', dataUrl};
+        prodAgregarAnexoATodaOT(r.ot, anexo);
+        saveProduccion(); render(); toast('Anexo agregado a toda la OT '+r.ot+'.');
       });
     }
   };
