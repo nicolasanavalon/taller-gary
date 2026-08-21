@@ -274,6 +274,9 @@
   .prod-table th.prod-col-freeze,.prod-table td.prod-col-freeze{position:sticky;left:0;z-index:1;background:#fff;box-shadow:2px 0 5px rgba(0,0,0,.10)}
   .prod-table thead th.prod-col-freeze{z-index:3;background:#faf7ef}
   .prod-table tr.sel td.prod-col-freeze{background:var(--gold-soft)}
+  /* Modo compacto de Producción: oculta también el logo y el menú de arriba, para que quede casi solo la tabla. */
+  body.prod-hide-chrome header,body.prod-hide-chrome nav{display:none}
+  body.prod-hide-chrome main{padding-top:10px}
   .ot-doc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
   .ot-doc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px;margin-bottom:16px}
   .ot-doc-grid label{margin-bottom:2px}
@@ -471,6 +474,7 @@ function badge(status){
 function render(){
   const app=document.getElementById('app');
   app.className = current==='produccion' ? 'prod-main' : '';
+  if(current!=='produccion') document.body.classList.remove('prod-hide-chrome');
   if(current==='inicio'){ app.innerHTML=renderInicio(); bindCards(); return; }
   const m=MODULES.find(x=>x.id===current);
   // Reemplazar el HTML de la tabla de Producción borra el scroll (de la página y del
@@ -2494,10 +2498,11 @@ let PRODUCCION = loadProduccion();
 // OJO: nunca se guarda/publica nada acá al cargar la página — solo se lee. La carga local
 // (localStorage) sirve de vista instantánea mientras se trae lo real de la nube arriba.
 prodSincronizarAhora(true);
-let prodCompacto=localStorage.getItem('taller_gary_prod_compacto')==='1'; // oculta título+stats para que la tabla use más pantalla
+let prodCompacto=localStorage.getItem('taller_gary_prod_compacto')==='1'; // oculta título+stats (y logo+menú) para que la tabla use toda la pantalla
 function prodToggleCompacto(){
   prodCompacto=!prodCompacto;
   localStorage.setItem('taller_gary_prod_compacto', prodCompacto?'1':'0');
+  document.body.classList.toggle('prod-hide-chrome', prodCompacto);
   render();
 }
 let prodTab='vigentes';        // 'vigentes' | 'entregadas' | 'todo'
@@ -2651,12 +2656,17 @@ function renderProduccion(m){
     <div class="row" style="margin-top:12px"><button class="btn ghost sm" onclick="prodNuevaFila()">+ Agregar fila</button></div>
   `;
 }
-function bindProduccion(){ prodActualizarPildoraSync(); prodAjustarStickyOffset(); }
+function bindProduccion(){
+  document.body.classList.toggle('prod-hide-chrome', prodCompacto);
+  prodActualizarPildoraSync();
+  prodAjustarStickyOffset();
+}
 /* La cabecera del sitio (logo+fecha) y el menú de navegación cambian de alto según el
    dispositivo (en el celular el menú se acomoda en varias filas). Medimos su alto real
    para que el cuadro de la tabla (y su fila de títulos) queden pegados justo debajo,
-   sin que el menú los tape. */
+   sin que el menú los tape. Si el modo compacto ocultó esa cabecera, el offset es 0. */
 function prodAjustarStickyOffset(){
+  if(prodCompacto){ document.documentElement.style.setProperty('--sticky-off', '0px'); return; }
   const h=document.querySelector('header'), n=document.querySelector('nav');
   const off=(h?h.offsetHeight:0)+(n?n.offsetHeight:0);
   document.documentElement.style.setProperty('--sticky-off', off+'px');
