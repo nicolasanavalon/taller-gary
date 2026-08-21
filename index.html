@@ -3186,8 +3186,16 @@ function prodActualizarPildoraSync(){
 }
 let prodEnviando=false;      // true mientras hay un guardado en curso (POST en vuelo)
 let prodEnviarPendiente=false; // quedó algo nuevo por mandar mientras el anterior viajaba
+/* El navegador tiene un límite de espacio para localStorage (unos pocos MB) y con muchas
+   fotos/anexos se puede llenar. localStorage acá es solo una copia rápida de respaldo —
+   la nube (Google Sheets) es la que de verdad importa. Si localStorage falla, NO debe
+   cortar el guardado en la nube (eso fue justo lo que pasó y dejó de sincronizar). */
+function prodGuardarLocal(){
+  try{ localStorage.setItem(KEY_PRODUCCION, JSON.stringify(PRODUCCION)); }
+  catch(e){ console.warn('No se pudo guardar copia local (sin espacio) — sigue guardando en la nube igual.', e); }
+}
 function saveProduccion(){
-  localStorage.setItem(KEY_PRODUCCION, JSON.stringify(PRODUCCION));
+  prodGuardarLocal();
   prodSyncEstado='guardando'; prodActualizarPildoraSync();
   clearTimeout(prodSyncTimer);
   prodSyncTimer=setTimeout(prodEnviarNube, 900);
@@ -3227,7 +3235,7 @@ async function prodEnviarNube(){
     toast('Otra pestaña o dispositivo guardó algo más nuevo — se actualizó esta vista. Revisa y vuelve a hacer tu cambio si hace falta.', 'error');
   } else if(ok){
     prodSyncEstado='nube'; prodSyncDetalle='';
-    localStorage.setItem(KEY_PRODUCCION, JSON.stringify(PRODUCCION));
+    prodGuardarLocal();
   } else{
     prodSyncEstado='nube-error'; prodSyncDetalle=String(ultimoError&&ultimoError.message||ultimoError);
     toast('No se pudo guardar en la nube. Revisa tu conexión — el cambio queda solo en este navegador por ahora.', 'error');
@@ -3252,7 +3260,7 @@ async function prodSincronizarAhora(silencioso){
     prodSyncEstado='nube'; prodSyncDetalle=''; prodActualizarPildoraSync();
     if(current==='produccion') render();
     if(huboNuevas) saveProduccion(); // solo si el merge trajo filas nuevas (ej. una OT que agregué yo) que aún no están en la nube
-    else localStorage.setItem(KEY_PRODUCCION, JSON.stringify(PRODUCCION));
+    else prodGuardarLocal();
     if(!silencioso) toast('Sincronizado: '+n+' fila(s) desde la nube.');
   }catch(e){
     console.error('No se pudo leer desde la nube:', e);
@@ -3274,7 +3282,7 @@ function prodFusionarRemoto(remoto){
     if(!existentes.has(sr.uid) && !PRODUCCION.removedSeeds.includes(sr.uid)){ PRODUCCION.rows.push({...sr}); huboNuevas=true; }
   });
   normalizarProduccion(PRODUCCION);
-  localStorage.setItem(KEY_PRODUCCION, JSON.stringify(PRODUCCION));
+  prodGuardarLocal();
   return huboNuevas;
 }
 if(!prodSyncPoll) prodSyncPoll=setInterval(()=>{ if(current==='produccion') prodSincronizarAhora(true); }, 20000);
@@ -3332,6 +3340,12 @@ function prodRowsVista(){
   if(prodStatFiltro==='sublim') rows=rows.filter(r=>!r.entregada && r.sublimacion);
   const q=(prodBusqueda||'').trim().toLowerCase();
   if(q) rows=rows.filter(r=>[r.ot,r.cliente,r.comuna,r.producto,r.etapa,r.tela,r.obs].some(v=>(''+(v||'')).toLowerCase().includes(q)));
+  // Ordenadas por fecha de compromiso (la más urgente primero) — como todas las filas de
+  // una misma OT comparten la misma fecha, quedan agrupadas juntas de forma natural.
+  rows=rows.slice().sort((a,b)=>{
+    const fa=a.fCom||'9999-99-99', fb=b.fCom||'9999-99-99';
+    return fa<fb?-1:(fa>fb?1:0);
+  });
   return rows;
 }
 function prodEmptyRowHtml(){
