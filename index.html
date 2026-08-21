@@ -3098,37 +3098,46 @@ function prodActualizarPildoraSync(){
   el.textContent=txt;
   el.className='pill prod-cloud-pill '+prodSyncEstado;
 }
+let prodEnviando=false;      // true mientras hay un guardado en curso (POST en vuelo)
+let prodEnviarPendiente=false; // quedó algo nuevo por mandar mientras el anterior viajaba
 function saveProduccion(){
   localStorage.setItem(KEY_PRODUCCION, JSON.stringify(PRODUCCION));
   prodSyncEstado='guardando'; prodActualizarPildoraSync();
   clearTimeout(prodSyncTimer);
-  prodSyncTimer=setTimeout(()=>prodEnviarNube(0), 900);
+  prodSyncTimer=setTimeout(prodEnviarNube, 900);
 }
-function prodEnviarNube(intento){
-  prodSyncTimer=null; // el envío ya está en curso; deja de bloquear las lecturas
+/* Nunca manda dos guardados a la vez: si ya hay uno viajando (ej. con una foto pesada, en
+   señal débil) y editas algo más mientras tanto, ese cambio espera y se manda apenas el
+   primero termine — así el guardado más lento nunca puede llegar después y pisar al más
+   nuevo (que era la causa de que fotos/datos "desaparecieran"). */
+async function prodEnviarNube(){
+  prodSyncTimer=null;
+  if(prodEnviando){ prodEnviarPendiente=true; prodSyncEstado='guardando'; prodActualizarPildoraSync(); return; }
+  prodEnviando=true;
   prodSyncEstado='guardando'; prodActualizarPildoraSync();
-  fetch(PROD_SYNC_URL, {
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify(PRODUCCION),
-  }).then(r=>{
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    prodSyncEstado='nube'; prodSyncDetalle=''; prodActualizarPildoraSync();
-  }).catch(e=>{
-    console.error('No se pudo guardar en la nube:', e);
-    if((intento||0)<2){
-      // Reintenta un par de veces antes de avisar — puede ser solo un corte de red momentáneo.
-      setTimeout(()=>prodEnviarNube((intento||0)+1), 2000);
-      return;
-    }
-    prodSyncEstado='nube-error'; prodSyncDetalle=String(e&&e.message||e); prodActualizarPildoraSync();
+  let ok=false, ultimoError=null;
+  for(let intento=0; intento<3 && !ok; intento++){
+    if(intento>0) await new Promise(res=>setTimeout(res,2000));
+    try{
+      const body=JSON.stringify(PRODUCCION); // siempre el estado más reciente, en cada intento
+      const r=await fetch(PROD_SYNC_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      ok=true;
+    }catch(e){ ultimoError=e; console.error('No se pudo guardar en la nube:', e); }
+  }
+  prodEnviando=false;
+  if(ok){ prodSyncEstado='nube'; prodSyncDetalle=''; }
+  else{
+    prodSyncEstado='nube-error'; prodSyncDetalle=String(ultimoError&&ultimoError.message||ultimoError);
     toast('No se pudo guardar en la nube. Revisa tu conexión — el cambio queda solo en este navegador por ahora.', 'error');
-  });
+  }
+  prodActualizarPildoraSync();
+  if(prodEnviarPendiente){ prodEnviarPendiente=false; prodEnviarNube(); }
 }
 async function prodSincronizarAhora(silencioso){
-  if(prodSyncTimer){
-    // Hay un cambio local recién hecho, todavía por subir — no lo pisemos trayendo una
-    // lectura vieja de la nube. Se reintenta solo apenas termine de subir (ver prodEnviarNube).
+  if(prodSyncTimer || prodEnviando){
+    // Hay un cambio local recién hecho (o viajando ahora mismo) — no lo pisemos trayendo
+    // una lectura vieja de la nube. Se reintenta solo apenas termine de subir (prodEnviarNube).
     if(!silencioso) toast('Hay un cambio sin guardar todavía, espera un segundo…');
     return;
   }
@@ -3136,7 +3145,7 @@ async function prodSincronizarAhora(silencioso){
     const res=await fetch(PROD_SYNC_URL, {cache:'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const remoto=await res.json();
-    if(prodSyncTimer) return; // mientras esperábamos la respuesta, se hizo una edición local — no la pisemos
+    if(prodSyncTimer || prodEnviando) return; // mientras esperábamos la respuesta, se hizo/está en curso una edición local — no la pisemos
     const n=(remoto.rows||[]).length;
     const huboNuevas=prodFusionarRemoto(remoto);
     prodSyncEstado='nube'; prodSyncDetalle=''; prodActualizarPildoraSync();
