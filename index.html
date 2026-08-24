@@ -138,6 +138,7 @@
   .foto-preview img{width:100%;height:100%;object-fit:cover}
   .foto-empty{color:var(--muted);font-size:9.5px;text-align:center;padding:4px;line-height:1.35}
   .foto-preview.drag-over{border-color:var(--gold);background:var(--gold-soft)}
+  .foto-preview:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-soft)}
   .foto-actions{display:flex;gap:8px;flex-wrap:wrap}
 
   /* ---------- Galería de fotos ---------- */
@@ -335,7 +336,11 @@
      igual que las columnas del Excel de costeo. Se desplaza con scroll lateral.
      Todos los ítems se mueven junto con el scroll de toda la página (no tienen scroll propio). */
   #itemsCot{display:flex;flex-direction:row;align-items:flex-start;gap:16px;
-    overflow-x:auto;padding-bottom:12px;scroll-snap-type:x proximity}
+    overflow-x:auto;padding-bottom:12px;scroll-snap-type:x proximity;
+    /* full-bleed: se sale del ancho máximo centrado de <main> para que el primer ítem
+       parta pegado al borde izquierdo de la pantalla, no al margen del contenido centrado */
+    width:100vw;position:relative;left:50%;margin-left:-50vw;
+    padding-left:18px;padding-right:18px}
   #itemsCot .item-card{flex:0 0 460px;width:460px;margin-bottom:0;scroll-snap-align:start;
     display:flex;flex-direction:column;padding-top:0}
   #itemsCot .item-card .item-body{padding:0 20px 20px}
@@ -459,9 +464,12 @@ MODULES.forEach(m=>{
   b.dataset.id=m.id;
   nav.appendChild(b);
 });
-function go(id){ current=id; window.scrollTo(0,0);
-  [...nav.children].forEach(b=>b.classList.toggle('active',b.dataset.id===id));
-  render();
+function go(id){
+  advertirSalidaSiSucia(()=>{
+    current=id; window.scrollTo(0,0);
+    [...nav.children].forEach(b=>b.classList.toggle('active',b.dataset.id===id));
+    render();
+  });
 }
 
 function badge(status){
@@ -1005,13 +1013,13 @@ function toast(msg, tipo){
   box.appendChild(t);
   setTimeout(()=>{ t.classList.add('out'); setTimeout(()=>t.remove(),300); }, 2800);
 }
-function confirmDialog(msg, onOk){
+function confirmDialog(msg, onOk, labelOk){
   const bg=document.createElement('div'); bg.className='confirm-bg';
   bg.innerHTML=`<div class="confirm-box">
     <p>${esc(msg)}</p>
     <div class="row" style="justify-content:flex-end;margin-top:14px">
       <button class="btn ghost sm" id="cfCancel">Cancelar</button>
-      <button class="btn danger sm" id="cfOk">Confirmar</button>
+      <button class="btn danger sm" id="cfOk">${esc(labelOk||'Confirmar')}</button>
     </div>
   </div>`;
   document.body.appendChild(bg);
@@ -1019,6 +1027,17 @@ function confirmDialog(msg, onOk){
   bg.querySelector('#cfOk').onclick=()=>{ bg.remove(); onOk(); };
   bg.addEventListener('click',e=>{ if(e.target===bg) bg.remove(); });
 }
+/* ---------- Aviso de cambios sin guardar al salir de una cotización ---------- */
+let cotizacionSucia=false;
+function marcarSucia(){ cotizacionSucia=true; }
+function advertirSalidaSiSucia(cb){
+  if(current==='costos' && costosView==='detalle' && cotizacionSucia){
+    confirmDialog('Tienes cambios sin guardar en esta cotización. ¿Quieres salir sin guardarlos?', ()=>{ cotizacionSucia=false; cb(); }, 'Salir sin guardar');
+  } else cb();
+}
+window.addEventListener('beforeunload', e=>{
+  if(current==='costos' && costosView==='detalle' && cotizacionSucia){ e.preventDefault(); e.returnValue=''; }
+});
 function backupCostos(){
   const blob=new Blob([JSON.stringify(COSTOS,null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
@@ -1051,8 +1070,10 @@ function toggleWarnFila(input, isWarn){
   const row = input.closest ? input.closest('.confeccion-row') : null;
   if(row) row.classList.toggle('warn', !!isWarn);
 }
-function abrirDetalleCotizacion(id){ detalleCotId=id; costosView='detalle'; render(); window.scrollTo(0,0); }
-function cerrarDetalleCotizacion(){ costosView='lista'; detalleCotId=null; render(); window.scrollTo(0,0); }
+function abrirDetalleCotizacion(id){ detalleCotId=id; costosView='detalle'; cotizacionSucia=false; render(); window.scrollTo(0,0); }
+function cerrarDetalleCotizacion(){
+  advertirSalidaSiSucia(()=>{ costosView='lista'; detalleCotId=null; render(); window.scrollTo(0,0); });
+}
 function nuevoDraftCliente(){
   draftCliente = { id:'', fecha:todayISO(), estado:'Pendiente', empresa:'', rut:'', contacto:'', mail:'', telefono:'', telefono2:'', direccion:'', comuna:'', region:'' };
   draftEditOrig = null;
@@ -1331,7 +1352,7 @@ function itemCardHTML(it, i){
 
     <label>Foto de la bandera</label>
     <div class="foto-box">
-      <div class="foto-preview">${it.foto?`<img src="${esc(it.foto)}">`:`<div class="foto-empty">Sin foto<br>(arrastra aquí)</div>`}</div>
+      <div class="foto-preview" tabindex="0" title="Haz clic aquí y pega (Cmd+V) una imagen copiada">${it.foto?`<img src="${esc(it.foto)}">`:`<div class="foto-empty">Sin foto<br>(arrastra o pega aquí)</div>`}</div>
       <div class="foto-actions">
         <button class="btn ghost sm foto-subir" type="button">📤 Subir foto</button>
         <input type="file" accept="image/*" class="foto-file" style="display:none">
@@ -1494,9 +1515,10 @@ function renderDetalleCotizacion(c){
     <div class="backlink" onclick="cerrarDetalleCotizacion()">← Volver a Costos y Cotizaciones</div>
     <div class="page-head">
       <div class="icon">🧮</div>
-      <div><h1>Cotización ${esc(c.id)} ${estadoBadge(c.estado||'Pendiente')}</h1>
+      <div style="flex:1"><h1>Cotización ${esc(c.id)} ${estadoBadge(c.estado||'Pendiente')}</h1>
         <div class="sub">${esc(c.empresa)}${c.rut?' · RUT '+esc(c.rut):''}${c.contacto?' · '+esc(c.contacto):''}</div>
       </div>
+      <button class="btn" onclick="guardarItemsCotizacion()">💾 Guardar cambios</button>
     </div>
 
     <div id="itemsCot">${items.map((it,i)=>itemCardHTML(it,i)).join('')}</div>
@@ -1507,7 +1529,6 @@ function renderDetalleCotizacion(c){
     <div class="panel" style="margin-top:16px">
       <div class="row between">
         <h2 style="margin:0">Performance Total</h2>
-        <button class="btn" onclick="guardarItemsCotizacion()">Guardar cambios</button>
       </div>
       <div class="cost-summary" style="margin-top:10px">
         <div class="cs-row hl"><span>Venta con IVA</span><b id="grTotalConIva">${money(totales.conIva)}</b></div>
@@ -1609,7 +1630,7 @@ function recalcTotalesDetalle(){
 }
 function aplicarFotoACard(card, dataUrl){
   card.querySelector('.ci-foto').value=dataUrl||'';
-  card.querySelector('.foto-preview').innerHTML = dataUrl? `<img src="${dataUrl}">` : `<div class="foto-empty">Sin foto<br>(arrastra aquí)</div>`;
+  card.querySelector('.foto-preview').innerHTML = dataUrl? `<img src="${dataUrl}">` : `<div class="foto-empty">Sin foto<br>(arrastra o pega aquí)</div>`;
   const mini=card.querySelector('.item-card-head-mini');
   if(mini) mini.innerHTML = dataUrl? `<img src="${dataUrl}">` : '';
   const actions=card.querySelector('.foto-actions');
@@ -1652,10 +1673,12 @@ function bindDetalleCotizacion(){
   const recalcCard=recalcCardDetalle, recalcTotales=recalcTotalesDetalle;
   wrap.addEventListener('input', e=>{
     const card=e.target.closest('.item-card'); if(!card) return;
+    marcarSucia();
     recalcCard(card); recalcTotales();
   });
   wrap.addEventListener('change', e=>{
     const card=e.target.closest('.item-card'); if(!card) return;
+    marcarSucia();
     if(e.target.classList.contains('ci-tipovaina')||e.target.classList.contains('ci-tipoacabado')){
       const idx=[...wrap.children].indexOf(card);
       const it=leerItemDeCard(card);
@@ -1691,6 +1714,7 @@ function bindDetalleCotizacion(){
     const file=e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if(!file){ return; }
     if(!file.type || !file.type.startsWith('image/')){ toast('Arrastra un archivo de imagen.','error'); return; }
+    marcarSucia();
     comprimirImagen(file, dataUrl=>{
       aplicarFotoACard(card, dataUrl);
       const tipo=card.querySelector('.ci-tipo').value.trim();
@@ -1698,17 +1722,34 @@ function bindDetalleCotizacion(){
       toast('Foto agregada.');
     });
   });
+  wrap.addEventListener('paste', e=>{
+    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
+    const card=e.target.closest('.item-card'); if(!card) return;
+    const items=(e.clipboardData && e.clipboardData.items) || [];
+    let file=null;
+    for(const it of items){ if(it.type && it.type.startsWith('image/')){ file=it.getAsFile(); break; } }
+    if(!file){ toast('No hay ninguna imagen copiada en el portapapeles.','error'); return; }
+    e.preventDefault();
+    marcarSucia();
+    comprimirImagen(file, dataUrl=>{
+      aplicarFotoACard(card, dataUrl);
+      const tipo=card.querySelector('.ci-tipo').value.trim();
+      if(tipo){ FOTOS.items.push({id:uid(),nombre:tipo,img:dataUrl}); saveFotos(); }
+      toast('Foto pegada.');
+    });
+  });
   wrap.addEventListener('click', e=>{
     const card=e.target.closest('.item-card');
     const margenBtn=e.target.closest('.margen-esc[data-pct]');
-    if(e.target.classList.contains('del-item')){ if(wrap.children.length>1){ card.remove(); recalcTotales(); } else toast('Debe quedar al menos un ítem.','error'); }
+    if(e.target.classList.contains('del-item')){ if(wrap.children.length>1){ marcarSucia(); card.remove(); recalcTotales(); } else toast('Debe quedar al menos un ítem.','error'); }
     else if(margenBtn){
+      marcarSucia();
       card.querySelector('.ci-margen').value=formatPct(+margenBtn.dataset.pct);
       recalcCard(card); recalcTotales();
     }
     else if(e.target.classList.contains('foto-subir')){ card.querySelector('.foto-file').click(); }
     else if(e.target.classList.contains('foto-buscar')){ abrirGaleriaFotos(card); }
-    else if(e.target.classList.contains('foto-quitar')){ aplicarFotoACard(card, ''); }
+    else if(e.target.classList.contains('foto-quitar')){ marcarSucia(); aplicarFotoACard(card, ''); }
   });
   wrap.addEventListener('focusout', e=>{
     const card=e.target.closest('.item-card'); if(!card) return;
@@ -1742,9 +1783,11 @@ function bindDetalleCotizacion(){
   });
   const addBtn=$('#addItemCot');
   if(addBtn) addBtn.onclick=()=>{
+    marcarSucia();
     const div=document.createElement('div');
     div.innerHTML=itemCardHTML(itemNuevo(), wrap.children.length);
     wrap.appendChild(div.firstElementChild);
+    div.firstElementChild.scrollIntoView({behavior:'smooth', block:'nearest', inline:'end'});
   };
   const buscarInput=$('#buscarAnteriorInput');
   if(buscarInput) buscarInput.addEventListener('keydown', e=>{ if(e.key==='Enter') buscarItemsAnteriores(); });
@@ -1818,6 +1861,8 @@ function guardarItemsCotizacion(){
   c.items=items;
   c.total=items.reduce((s,it)=>s+calcularItem(it).totalConIva,0);
   saveCostos();
+  cotizacionSucia=false;
+  toast('Cambios guardados.');
   render();
 }
 
