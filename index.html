@@ -2730,8 +2730,19 @@ async function prodSincronizarAhora(silencioso){
     return;
   }
   try{
-    const res=await fetch(PROD_SYNC_URL, {cache:'no-store'});
-    if(!res.ok) throw new Error('HTTP '+res.status);
+    // Google Apps Script a veces responde 404 de forma intermitente (arranque en frío del
+    // servicio) aunque los datos estén bien guardados — se reintenta un par de veces antes
+    // de mostrar error, para no dejar al celular sin datos por una falla pasajera.
+    let res, ultimoError;
+    for(let intento=0; intento<3; intento++){
+      if(intento>0) await new Promise(res2=>setTimeout(res2,1500));
+      try{
+        res=await fetch(PROD_SYNC_URL, {cache:'no-store'});
+        if(res.ok) break;
+        ultimoError=new Error('HTTP '+res.status); res=null;
+      }catch(e){ ultimoError=e; res=null; }
+    }
+    if(!res) throw ultimoError;
     const remoto=await res.json();
     if(prodSyncTimer || prodEnviando) return; // mientras esperábamos la respuesta, se hizo/está en curso una edición local — no la pisemos
     const n=(remoto.rows||[]).length;
