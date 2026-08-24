@@ -1198,7 +1198,7 @@ function itemNuevo(){
     numEstrellas:1, creaCosto:730,
     tipoVaina:'Vaina de Lona', huinchaCosto:250, argollaCosto:200, argollaExtra:0,
     tipoAcabado:'Confección', armadoCosto:null, cortadoCosto:null, estrellaCosto:null, limpiezaCosto:null, sublimadoCosto:null,
-    fletePct:0.10, finImpPct:0.06, margenPct:0.20,
+    fletePct:0.15, finImpPct:0.10, margenPct:0.20,
   };
 }
 /* Números en formato chileno: coma decimal (13,00 = 13 metros; 0,90 = 90 cm) */
@@ -1220,6 +1220,7 @@ function parseMiles(str){ if(str==null) return 0; const n=parseInt(String(str).r
    La columna "Cantidad" se muestra redondeada a 1 decimal, pero el monto en $ siempre
    se calcula con el valor exacto (con todos los decimales), para no perder precisión en el costeo. */
 function redondear1(n){ return Math.round((+n||0)*10)/10; }
+function redondear4(n){ return Math.round((+n||0)*10000)/10000; }
 function calcularTela(it){
   const alto=parseNumCL(it.alto), ancho=parseNumCL(it.ancho);
   const telaCantExacta = (alto&&ancho) ? ((alto*ancho)/1.4)*1.2 : 0;
@@ -1228,7 +1229,7 @@ function calcularTela(it){
   const telaSubtotal = telaCantExacta*telaCosto;
   const creaActiva = it.tipoAcabado==='Estrella';
   const numEstrellas = it.numEstrellas!=null && it.numEstrellas!=='' ? +it.numEstrellas : 1;
-  const creaCantDefault = creaActiva ? redondear1((telaCantExacta/12)*numEstrellas) : 0;
+  const creaCantDefault = creaActiva ? redondear4((telaCantExacta/12)*numEstrellas) : 0;
   const creaCantExacta = creaActiva ? (it.creaCant!=null && it.creaCant!=='' ? +it.creaCant : creaCantDefault) : 0;
   const creaCant = creaCantExacta;
   const creaCosto = it.creaCosto!=null && it.creaCosto!=='' ? +it.creaCosto : 730;
@@ -1295,9 +1296,9 @@ function calcularConfeccion(it){
 /* Otros: Flete = % de todos los costos anteriores (Telas+Accesorios+Confección+líneas).
    Costo Finan/Impos/Imprevisto = % de esos mismos costos anteriores, SIN considerar el Flete. */
 function calcularOtros(it, baseCostos){
-  const fletePct = it.fletePct!=null && it.fletePct!=='' ? +it.fletePct : 0.10;
+  const fletePct = it.fletePct!=null && it.fletePct!=='' ? +it.fletePct : 0.15;
   const flete = baseCostos*fletePct;
-  const finImpPct = it.finImpPct!=null && it.finImpPct!=='' ? +it.finImpPct : 0.06;
+  const finImpPct = it.finImpPct!=null && it.finImpPct!=='' ? +it.finImpPct : 0.10;
   const finImp = baseCostos*finImpPct;
   const subtotalOtros = flete+finImp;
   return {fletePct,flete,finImpPct,finImp,subtotalOtros};
@@ -1459,13 +1460,13 @@ function itemCardHTML(it, i){
     <div class="confeccion-row">
       <div>Flete</div>
       <div></div>
-      <input class="ci-flete pct" type="number" step="1" value="${formatPct(it.fletePct)}">
+      <input class="ci-flete pct" type="number" step="1" value="${formatPct(r.fletePct)}">
       <div class="flete-subtotal right">${money(r.flete)}</div>
     </div>
     <div class="confeccion-row">
       <div>Costo Finan/Impos/Imprevisto</div>
       <div></div>
-      <input class="ci-finimp pct" type="number" step="1" value="${formatPct(it.finImpPct)}">
+      <input class="ci-finimp pct" type="number" step="1" value="${formatPct(r.finImpPct)}">
       <div class="finimp-subtotal right">${money(r.finImp)}</div>
     </div>
     <div class="confeccion-row subtotal">
@@ -1772,7 +1773,7 @@ function bindDetalleCotizacion(){
       if(tipoAcabadoActual==='Estrella'){
         const telaCantExactaAhora=(ancho&&alto)?((alto*ancho)/1.4)*1.2:0;
         const numEstrellasAhora=+card.querySelector('.ci-numestrellas').value||1;
-        card.querySelector('.ci-creacant').value=redondear1((telaCantExactaAhora/12)*numEstrellasAhora);
+        card.querySelector('.ci-creacant').value=redondear4((telaCantExactaAhora/12)*numEstrellasAhora);
       }
       recalcCard(card); recalcTotales();
     }
@@ -1780,7 +1781,7 @@ function bindDetalleCotizacion(){
       const ancho=parseNumCL(card.querySelector('.ci-ancho').value), alto=parseNumCL(card.querySelector('.ci-alto').value);
       const telaCantExactaAhora=(ancho&&alto)?((alto*ancho)/1.4)*1.2:0;
       const numEstrellasAhora=+e.target.value||1;
-      card.querySelector('.ci-creacant').value=redondear1((telaCantExactaAhora/12)*numEstrellasAhora);
+      card.querySelector('.ci-creacant').value=redondear4((telaCantExactaAhora/12)*numEstrellasAhora);
       recalcCard(card); recalcTotales();
     }
     else if(e.target.classList.contains('ci-armadocosto')){
