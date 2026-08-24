@@ -1195,8 +1195,8 @@ function itemNuevo(){
   return {
     medida:'', cantidad:1, tipo:'', tipoProducto:'Bandera', foto:'',
     alto:'', ancho:'', tipoTela:'Bistrech', telaCosto:730,
-    creaCant:1, creaCosto:730,
-    tipoVaina:'Vaina de Lona', huinchaCosto:300, argollaCosto:200, argollaExtra:0,
+    numEstrellas:1, creaCosto:730,
+    tipoVaina:'Vaina de Lona', huinchaCosto:250, argollaCosto:200, argollaExtra:0,
     tipoAcabado:'Confección', armadoCosto:null, cortadoCosto:null, estrellaCosto:null, limpiezaCosto:null, sublimadoCosto:null,
     fletePct:0.10, finImpPct:0.06, margenPct:0.20,
   };
@@ -1227,11 +1227,13 @@ function calcularTela(it){
   const telaCosto = it.telaCosto!=null && it.telaCosto!=='' ? +it.telaCosto : 730;
   const telaSubtotal = telaCantExacta*telaCosto;
   const creaActiva = it.tipoAcabado==='Estrella';
-  const creaCantExacta = creaActiva ? (it.creaCant!=null && it.creaCant!=='' ? +it.creaCant : 1) : 0;
+  const numEstrellas = it.numEstrellas!=null && it.numEstrellas!=='' ? +it.numEstrellas : 1;
+  const creaCantDefault = creaActiva ? redondear1((telaCantExacta/12)*numEstrellas) : 0;
+  const creaCantExacta = creaActiva ? (it.creaCant!=null && it.creaCant!=='' ? +it.creaCant : creaCantDefault) : 0;
   const creaCant = creaCantExacta;
   const creaCosto = it.creaCosto!=null && it.creaCosto!=='' ? +it.creaCosto : 730;
   const creaSubtotal = creaCantExacta*creaCosto;
-  return {telaCant,telaCantExacta,telaCosto,telaSubtotal,creaActiva,creaCant,creaCantExacta,creaCosto,creaSubtotal};
+  return {telaCant,telaCantExacta,telaCosto,telaSubtotal,creaActiva,numEstrellas,creaCantDefault,creaCant,creaCantExacta,creaCosto,creaSubtotal};
 }
 function fmtNum(n){ n=+n||0; return (Math.round(n*10000)/10000).toLocaleString('es-CL',{maximumFractionDigits:4}); }
 /* Accesorios: Huincha de poliéster = Alto×2 + 0,10 m (10 cm) (solo si vaina = Huincha de poliéster)
@@ -1241,7 +1243,7 @@ function calcularAccesorios(it, telaCalc){
   const alto=parseNumCL(it.alto), ancho=parseNumCL(it.ancho);
   const huinchaCantExacta = esHuincha ? (alto*2+0.10) : 0;
   const huinchaCant = redondear1(huinchaCantExacta);
-  const huinchaCosto = it.huinchaCosto!=null && it.huinchaCosto!=='' ? +it.huinchaCosto : 300;
+  const huinchaCosto = it.huinchaCosto!=null && it.huinchaCosto!=='' ? +it.huinchaCosto : 250;
   const huinchaSubtotal = huinchaCantExacta*huinchaCosto;
   const argollasBase = esHuincha ? argollasPorMedida(ancho,alto) : 0;
   const argollaExtra = +it.argollaExtra||0;
@@ -1340,9 +1342,10 @@ function itemCardHTML(it, i){
 
     <label>Tela</label>
     <div class="field"><label>Tipo de tela</label><input class="ci-tipotela" value="${esc(it.tipoTela||'Bistrech')}" placeholder="Bistrech"></div>
-    <div class="grid2">
+    <div class="grid3">
       <div class="field"><label>Tipo de vaina</label><select class="ci-tipovaina">${TIPOS_VAINA.map(tv=>`<option ${((it.tipoVaina||'Vaina de Lona')===tv)?'selected':''}>${tv}</option>`).join('')}</select></div>
       <div class="field"><label>Especificación</label><select class="ci-tipoacabado">${TIPOS_ACABADO.map(ta=>`<option ${((it.tipoAcabado||'Confección')===ta)?'selected':''}>${ta}</option>`).join('')}</select></div>
+      <div class="field"><label>Cantidad de Estrellas</label><input class="ci-numestrellas" type="number" min="0" step="1" value="${r.numEstrellas}" ${r.creaActiva?'':'disabled'}></div>
     </div>
 
     <label>Foto de la bandera</label>
@@ -1369,7 +1372,7 @@ function itemCardHTML(it, i){
     </div>
     <div class="tela-costeo-row">
       <div>Estrella ${r.creaActiva?'':'<span class="muted">(no aplica: no es Estrella)</span>'}</div>
-      <div class="argolla-cant-cell"><input class="ci-creacant" type="number" min="0" step="1" value="${it.creaCant!=null&&it.creaCant!==''?it.creaCant:1}" ${r.creaActiva?'':'disabled'}> <span class="unidad">un.</span></div>
+      <div class="argolla-cant-cell"><input class="ci-creacant" type="number" min="0" step="0.1" value="${r.creaCant}" ${r.creaActiva?'':'disabled'}> <span class="unidad">m</span></div>
       <input class="ci-creacosto" type="number" step="1" value="${r.creaCosto}" ${r.creaActiva?'':'disabled'}>
       <div class="crea-subtotal right">${money(r.creaSubtotal)}</div>
     </div>
@@ -1549,6 +1552,7 @@ function leerItemDeCard(card){
     tipoTela:card.querySelector('.ci-tipotela').value.trim(),
     telaCosto:card.querySelector('.ci-telacosto').value,
     creaCant:card.querySelector('.ci-creacant').value,
+    numEstrellas:card.querySelector('.ci-numestrellas').value,
     creaCosto:card.querySelector('.ci-creacosto').value,
     tipoVaina:card.querySelector('.ci-tipovaina').value,
     huinchaCosto:card.querySelector('.ci-huinchacosto').value,
@@ -1590,6 +1594,7 @@ function recalcCardDetalle(card){
   card.querySelector('.crea-subtotal').textContent=money(r.creaSubtotal);
   card.querySelector('.ci-creacosto').disabled=!r.creaActiva;
   card.querySelector('.ci-creacant').disabled=!r.creaActiva;
+  card.querySelector('.ci-numestrellas').disabled=!r.creaActiva;
   card.querySelector('.subtotal-telas').textContent=money(r.telaSubtotal+r.creaSubtotal);
   card.querySelector('.huincha-cant').textContent=formatNumCL(r.huinchaCant,1);
   card.querySelector('.huincha-subtotal').textContent=money(r.huinchaSubtotal);
@@ -1679,6 +1684,7 @@ function bindDetalleCotizacion(){
     if(e.target.classList.contains('ci-tipovaina')||e.target.classList.contains('ci-tipoacabado')){
       const idx=[...wrap.children].indexOf(card);
       const it=leerItemDeCard(card);
+      if(e.target.classList.contains('ci-tipoacabado')){ delete it.creaCant; it.numEstrellas=1; } // recalcula la Estrella con la fórmula fresca, no arrastra el valor viejo
       const div=document.createElement('div'); div.innerHTML=itemCardHTML(it, idx);
       wrap.replaceChild(div.firstElementChild, card);
       recalcTotales();
@@ -1762,6 +1768,19 @@ function bindDetalleCotizacion(){
       card.querySelector('.ci-estrellacosto').value=formatMiles(tipoAcabadoActual==='Aplicado' ? nuevoArmado : estrellaPorMedida(ancho,alto));
       // Limpieza/Embolsado siempre es el % (por defecto 20%) del Armado, altiro
       card.querySelector('.ci-limpiezacosto').value=formatMiles(nuevoArmado*CONFECCION_PCT.limpieza);
+      // Estrella (metros de crea) sigue la fórmula (metros tela/12)*cantidad de estrellas, altiro
+      if(tipoAcabadoActual==='Estrella'){
+        const telaCantExactaAhora=(ancho&&alto)?((alto*ancho)/1.4)*1.2:0;
+        const numEstrellasAhora=+card.querySelector('.ci-numestrellas').value||1;
+        card.querySelector('.ci-creacant').value=redondear1((telaCantExactaAhora/12)*numEstrellasAhora);
+      }
+      recalcCard(card); recalcTotales();
+    }
+    else if(e.target.classList.contains('ci-numestrellas')){
+      const ancho=parseNumCL(card.querySelector('.ci-ancho').value), alto=parseNumCL(card.querySelector('.ci-alto').value);
+      const telaCantExactaAhora=(ancho&&alto)?((alto*ancho)/1.4)*1.2:0;
+      const numEstrellasAhora=+e.target.value||1;
+      card.querySelector('.ci-creacant').value=redondear1((telaCantExactaAhora/12)*numEstrellasAhora);
       recalcCard(card); recalcTotales();
     }
     else if(e.target.classList.contains('ci-armadocosto')){
