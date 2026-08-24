@@ -159,16 +159,22 @@
   .tela-result b{color:var(--ink)}
   @media(max-width:760px){.tela-grid{grid-template-columns:1fr}}
 
-  /* ---------- Encabezado de ítem (miniatura + título + eliminar): fijo al hacer scroll dentro del ítem ---------- */
-  .item-card-head{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;flex:0 0 auto;
-    position:sticky;top:0;z-index:5;margin:0 -20px 12px;padding:20px 20px 14px;
+  /* ---------- Barra fija con la foto+nombre de cada ítem: queda pegada arriba al hacer scroll
+     de la PÁGINA (no de cada ítem). Es una fila aparte de las tarjetas, sincronizada por JS con
+     el scroll horizontal de #itemsCot, para que las columnas sigan alineadas. ---------- */
+  .items-headers-bar{overflow:hidden;
     background:var(--glass);-webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);
     border-bottom:1px solid var(--glass-strong)}
+  #itemsHeadersBar{position:sticky!important;top:114px;z-index:6}
+  .items-headers-track{display:flex;flex-direction:row;gap:16px;padding:14px 0;will-change:transform}
+  .item-card-head{display:flex;align-items:center;gap:10px;flex:0 0 460px;width:460px}
   .item-card-head-mini{flex:0 0 auto;width:34px;height:26px;border-radius:6px;overflow:hidden;
     border:1px solid var(--gold-line);background:#fff}
   .item-card-head-mini img{width:100%;height:100%;object-fit:cover;display:block}
-  .item-card-head h2{margin:0;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item-card-head h2{margin:0;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:15px;color:var(--ink)}
   .item-card-head .del-item{flex:0 0 auto}
+  @media(max-width:760px){.item-card-head{flex-basis:88vw;width:88vw}}
 
   /* ---------- Galería / listado en modal (reutilizado por plantillas) ---------- */
 
@@ -341,10 +347,7 @@
   .cotdet-bleed{margin-bottom:18px}
   #itemsCot{display:flex;flex-direction:row;align-items:flex-start;gap:16px;
     overflow-x:auto;padding-bottom:12px}
-  #itemsCot .item-card{flex:0 0 460px;width:460px;margin-bottom:0;
-    max-height:calc(100vh - 150px);overflow-y:auto;overflow-x:hidden;
-    display:flex;flex-direction:column;padding-top:0}
-  #itemsCot .item-card .item-body{padding:0 20px 20px}
+  #itemsCot .item-card{flex:0 0 460px;width:460px;margin-bottom:0}
   @media(max-width:760px){#itemsCot .item-card{flex-basis:88vw;width:88vw}}
   .del-item{background:linear-gradient(180deg,#e0665a,#d4483d);border:none;color:#fff;border-radius:9px;
     cursor:pointer;font-size:13px}
@@ -1322,15 +1325,17 @@ function calcularItem(it){
   const totalConIva = totalNeto+iva;
   return {...t,...a,...c,...o,subtotalA,subtotalB,totalCosto,margenMonto,precioUnitNeto,totalNeto,iva,totalConIva};
 }
-function itemCardHTML(it, i){
-  const r = calcularItem(it);
+function headerBlockHTML(it, i){
   const resumen = [it.tipo, it.ancho&&it.alto? `${it.ancho}×${it.alto}`:''].filter(Boolean).join(' · ');
-  return `<div class="panel item-card" data-idx="${i}">
-    <div class="item-card-head">
+  return `<div class="item-card-head" data-idx="${i}">
       <div class="item-card-head-mini">${it.foto?`<img src="${esc(it.foto)}">`:''}</div>
       <h2 title="${esc('Ítem '+(i+1)+(resumen?' — '+resumen:''))}">Ítem ${i+1}${resumen?' — '+esc(resumen):''}</h2>
       <button class="btn danger sm del-item" title="Eliminar ítem">✕ Eliminar ítem</button>
-    </div>
+    </div>`;
+}
+function itemCardHTML(it, i){
+  const r = calcularItem(it);
+  return `<div class="panel item-card" data-idx="${i}">
     <div class="item-body">
     <div class="field"><label>Tipo de producto</label>
       <select class="ci-tipoproducto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
@@ -1525,9 +1530,14 @@ function renderDetalleCotizacion(c){
       </div>
     </div>
 
+    <div id="itemsHeadersBar">
+      <div class="items-headers-bar full-bleed">
+        <div class="items-headers-track" id="itemsHeadersTrack">${items.map((it,i)=>headerBlockHTML(it,i)).join('')}</div>
+      </div>
+    </div>
     <div id="itemsCot" class="full-bleed">${items.map((it,i)=>itemCardHTML(it,i)).join('')}</div>
     <div class="full-bleed">
-      <div class="row">
+      <div class="row" style="margin-top:16px">
         <button class="btn ghost sm" id="addItemCot">+ Agregar ítem</button>
       </div>
 
@@ -1639,8 +1649,13 @@ function recalcTotalesDetalle(){
 function aplicarFotoACard(card, dataUrl){
   card.querySelector('.ci-foto').value=dataUrl||'';
   card.querySelector('.foto-preview').innerHTML = dataUrl? `<img src="${dataUrl}">` : `<div class="foto-empty">Sin foto<br>(arrastra o pega aquí)</div>`;
-  const mini=card.querySelector('.item-card-head-mini');
-  if(mini) mini.innerHTML = dataUrl? `<img src="${dataUrl}">` : '';
+  const wrap=$('#itemsCot'), track=$('#itemsHeadersTrack');
+  if(wrap && track){
+    const idx=[...wrap.children].indexOf(card);
+    const block=track.children[idx];
+    const mini=block && block.querySelector('.item-card-head-mini');
+    if(mini) mini.innerHTML = dataUrl? `<img src="${dataUrl}">` : '';
+  }
   const actions=card.querySelector('.foto-actions');
   const quitar=actions.querySelector('.foto-quitar');
   if(dataUrl && !quitar){
@@ -1679,6 +1694,22 @@ function abrirGaleriaFotos(card){
 function bindDetalleCotizacion(){
   const wrap=$('#itemsCot'); if(!wrap) return;
   const recalcCard=recalcCardDetalle, recalcTotales=recalcTotalesDetalle;
+  const headersTrack=$('#itemsHeadersTrack');
+  if(headersTrack){
+    wrap.addEventListener('scroll', ()=>{ headersTrack.style.transform='translateX('+(-wrap.scrollLeft)+'px)'; }, {passive:true});
+  }
+  const headersBar=$('#itemsHeadersBar');
+  if(headersBar) headersBar.addEventListener('click', e=>{
+    const btn=e.target.closest('.del-item'); if(!btn) return;
+    const block=btn.closest('.item-card-head'); if(!block) return;
+    const idx=[...headersTrack.children].indexOf(block);
+    const cards=[...wrap.children];
+    if(cards.length<=1){ toast('Debe quedar al menos un ítem.','error'); return; }
+    marcarSucia();
+    if(cards[idx]) cards[idx].remove();
+    block.remove();
+    recalcTotales();
+  });
   wrap.addEventListener('input', e=>{
     const card=e.target.closest('.item-card'); if(!card) return;
     marcarSucia();
@@ -1693,6 +1724,10 @@ function bindDetalleCotizacion(){
       if(e.target.classList.contains('ci-tipoacabado')){ delete it.creaCant; it.numEstrellas=1; } // recalcula la Estrella con la fórmula fresca, no arrastra el valor viejo
       const div=document.createElement('div'); div.innerHTML=itemCardHTML(it, idx);
       wrap.replaceChild(div.firstElementChild, card);
+      if(headersTrack && headersTrack.children[idx]){
+        const divH=document.createElement('div'); divH.innerHTML=headerBlockHTML(it, idx);
+        headersTrack.replaceChild(divH.firstElementChild, headersTrack.children[idx]);
+      }
       recalcTotales();
     }
     else if(e.target.classList.contains('foto-file')){
@@ -1750,8 +1785,7 @@ function bindDetalleCotizacion(){
   wrap.addEventListener('click', e=>{
     const card=e.target.closest('.item-card');
     const margenBtn=e.target.closest('.margen-esc[data-pct]');
-    if(e.target.classList.contains('del-item')){ if(wrap.children.length>1){ marcarSucia(); card.remove(); recalcTotales(); } else toast('Debe quedar al menos un ítem.','error'); }
-    else if(margenBtn){
+    if(margenBtn){
       marcarSucia();
       card.querySelector('.ci-margen').value=formatPct(+margenBtn.dataset.pct);
       recalcCard(card); recalcTotales();
@@ -1806,10 +1840,17 @@ function bindDetalleCotizacion(){
   const addBtn=$('#addItemCot');
   if(addBtn) addBtn.onclick=()=>{
     marcarSucia();
+    const idx=wrap.children.length;
+    const nuevo=itemNuevo();
     const div=document.createElement('div');
-    div.innerHTML=itemCardHTML(itemNuevo(), wrap.children.length);
+    div.innerHTML=itemCardHTML(nuevo, idx);
     wrap.appendChild(div.firstElementChild);
-    div.firstElementChild.scrollIntoView({behavior:'smooth', block:'nearest', inline:'end'});
+    if(headersTrack){
+      const divH=document.createElement('div');
+      divH.innerHTML=headerBlockHTML(nuevo, idx);
+      headersTrack.appendChild(divH.firstElementChild);
+    }
+    wrap.scrollTo({left:wrap.scrollWidth, behavior:'smooth'});
   };
   const buscarInput=$('#buscarAnteriorInput');
   if(buscarInput) buscarInput.addEventListener('keydown', e=>{ if(e.key==='Enter') buscarItemsAnteriores(); });
