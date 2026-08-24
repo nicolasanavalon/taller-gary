@@ -917,10 +917,11 @@ function autoCap(el,mode){
 function bindCostosForm(){
   const e1=$('#cfEmpresa'); if(e1) e1.addEventListener('input',()=>autoCap(e1,'title'));
   const e2=$('#cfContacto'); if(e2) e2.addEventListener('input',()=>autoCap(e2,'title'));
-  const e3=$('#cfDireccion'); if(e3) e3.addEventListener('input',()=>autoCap(e3,'sentence'));
+  const e3=$('#cfDireccion'); if(e3) e3.addEventListener('input',()=>autoCap(e3,'title'));
   const e4=$('#cfMail'); if(e4) e4.addEventListener('input',()=>autoLower(e4));
   const e5=$('#cfRut'); if(e5) e5.addEventListener('input',()=>autoRut(e5));
   const e6=$('#cfTelefono'); if(e6) e6.addEventListener('input',()=>autoTelefono(e6));
+  const e7=$('#cfTelefono2'); if(e7) e7.addEventListener('input',()=>autoTelefono(e7));
 }
 function autoLower(el){
   const pos=el.selectionStart, val=el.value, out=val.toLowerCase();
@@ -1047,7 +1048,7 @@ function toggleWarnFila(input, isWarn){
 function abrirDetalleCotizacion(id){ detalleCotId=id; costosView='detalle'; render(); window.scrollTo(0,0); }
 function cerrarDetalleCotizacion(){ costosView='lista'; detalleCotId=null; render(); window.scrollTo(0,0); }
 function nuevoDraftCliente(){
-  draftCliente = { id:'', fecha:todayISO(), estado:'Pendiente', empresa:'', rut:'', contacto:'', mail:'', telefono:'', direccion:'' };
+  draftCliente = { id:'', fecha:todayISO(), estado:'Pendiente', empresa:'', rut:'', contacto:'', mail:'', telefono:'', telefono2:'', direccion:'' };
   draftEditOrig = null;
 }
 
@@ -1062,7 +1063,7 @@ function tablaCotizaciones(rows, vacio){
     <th>Teléfono</th><th>Mail</th><th class="num">Total</th><th>Estado</th><th></th></tr></thead><tbody>
     ${rows.map(c=>`<tr style="cursor:pointer" onclick="abrirDetalleCotizacion('${c.id}')" title="Click para trabajar la cotización">
       <td><b>${esc(c.id)}</b></td><td>${fmtDateCL(c.fecha)}</td><td>${esc(c.empresa)}</td><td class="muted">${esc(c.rut)}</td>
-      <td class="muted">${esc(c.contacto)}</td><td class="muted">${esc(c.telefono)}</td><td class="muted">${esc(c.mail)}</td>
+      <td class="muted">${esc(c.contacto)}</td><td class="muted">${esc(c.telefono)}${c.telefono2?' / '+esc(c.telefono2):''}</td><td class="muted">${esc(c.mail)}</td>
       <td class="num">${c.total?money(c.total):'<span class="muted">—</span>'}</td>
       <td>${estadoBadge(c.estado||'Pendiente')}</td>
       <td class="right" style="white-space:nowrap">
@@ -1115,10 +1116,13 @@ function renderCostos(m){
         <div class="field"><label>Nombre Cliente/Empresa</label><input id="cfEmpresa" value="${esc(draftCliente.empresa)}" placeholder="Institución / empresa"></div>
         <div class="field"><label>RUT Cliente/Empresa</label><input id="cfRut" value="${esc(draftCliente.rut)}" placeholder="12.345.678-9"></div>
       </div>
-      <div class="grid3">
+      <div class="grid2">
         <div class="field"><label>Nombre contacto</label><input id="cfContacto" value="${esc(draftCliente.contacto)}" placeholder="Persona de contacto"></div>
         <div class="field"><label>Mail contacto</label><input type="email" id="cfMail" value="${esc(draftCliente.mail)}" placeholder="correo@ejemplo.cl"></div>
+      </div>
+      <div class="grid2">
         <div class="field"><label>Teléfono</label><input id="cfTelefono" value="${esc(draftCliente.telefono)}" placeholder="+56 9 ..."></div>
+        <div class="field"><label>Teléfono 2 <span class="muted" style="font-weight:400">(opcional, otro contacto)</span></label><input id="cfTelefono2" value="${esc(draftCliente.telefono2||'')}" placeholder="+56 9 ..."></div>
       </div>
       <div class="field"><label>Dirección</label><input id="cfDireccion" value="${esc(draftCliente.direccion)}" placeholder="Dirección de despacho / facturación"></div>
       <div class="row" style="justify-content:flex-end;margin-top:6px">
@@ -1820,7 +1824,8 @@ function guardarCotizacionCliente(){
     contacto:toTitleCase($('#cfContacto').value.trim()),
     mail:$('#cfMail').value.trim().toLowerCase(),
     telefono:formatTelefono($('#cfTelefono').value.trim()),
-    direccion:toSentenceCase($('#cfDireccion').value.trim()),
+    telefono2:formatTelefono($('#cfTelefono2').value.trim()),
+    direccion:toTitleCase($('#cfDireccion').value.trim()),
     items:draftCliente.items||[],
     total:draftCliente.total||0,
   };
