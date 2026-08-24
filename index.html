@@ -2702,29 +2702,76 @@ function prodGuardarLocal(){
   try{ localStorage.setItem(KEY_PRODUCCION, JSON.stringify(PRODUCCION)); }
   catch(e){ console.warn('No se pudo guardar copia local (sin espacio) — sigue guardando en la nube igual.', e); }
 }
+/* ---------- Guardado por "parches" (solución definitiva multi-dispositivo) ----------
+   Antes cada guardado mandaba el documento COMPLETO (varios MB) y comparaba un número
+   de versión: si otra pestaña/dispositivo (o un script) había guardado algo mientras
+   tanto, se rechazaba entero y había que rehacer el cambio — lento y con falsos
+   "otro dispositivo guardó algo más nuevo" que en realidad eran solo desfases.
+   Ahora cada guardado manda solo una lista corta de operaciones puntuales (este campo
+   de esta fila cambió, se agregó este anexo, etc.) y el servidor las aplica de a una,
+   bajo un candado, sobre lo último que tenga guardado. Dos dispositivos editando filas
+   distintas al mismo tiempo ya nunca chocan, y el guardado pesa unos bytes en vez de
+   varios MB — mucho más rápido. */
+let prodDirtyRows=new Set();  // uids de filas con cambios de campo sin mandar todavía
+let prodOpsExtra=[];          // agregar fila / borrar fila / agregar o quitar anexo, en orden
+function prodMarcarSucio(uid){ prodDirtyRows.add(uid); }
 function saveProduccion(){
   prodGuardarLocal();
   prodSyncEstado='guardando'; prodActualizarPildoraSync();
   clearTimeout(prodSyncTimer);
   prodSyncTimer=setTimeout(prodEnviarNube, 900);
 }
-/* Nunca manda dos guardados a la vez, y nunca sube un cambio más viejo que lo que ya hay
-   guardado: cada guardado incluye "_ifRev" (la última versión que este navegador vio). Si
-   el servidor ya tiene una versión más nueva (porque otra pestaña/dispositivo guardó algo
-   mientras tanto), RECHAZA el guardado en vez de pisarlo, y este navegador adopta esa
-   versión más nueva antes de reintentar. Así ninguna pestaña "atrasada" puede volver a
-   borrar trabajo reciente — que fue exactamente lo que pasó hoy. */
 async function prodEnviarNube(){
   prodSyncTimer=null;
   if(prodEnviando){ prodEnviarPendiente=true; prodSyncEstado='guardando'; prodActualizarPildoraSync(); return; }
+  const dirtySnapshot=new Set(prodDirtyRows);
+  const extraSnapshot=prodOpsExtra.slice();
+  const ops=extraSnapshot.slice();
+  dirtySnapshot.forEach(uid=>{
+    const r=PRODUCCION.rows.find(x=>x.uid===uid);
+    if(r) ops.push({op:'setRow', uid, fields:Object.assign({}, r)});
+  });
+  if(!ops.length){ prodSyncEstado='nube'; prodActualizarPildoraSync(); return; }
   prodEnviando=true;
+  prodSyncEstado='guardando'; prodActualizarPildoraSync();
+  let ok=false, ultimoError=null;
+  for(let intento=0; intento<3 && !ok; intento++){
+    if(intento>0) await new Promise(res=>setTimeout(res,2000));
+    try{
+      const body=JSON.stringify({_patch:true, ops});
+      const r=await fetch(PROD_SYNC_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const data=await r.json();
+      if(data && typeof data.rev==='number') PRODUCCION._rev=data.rev;
+      ok=true;
+    }catch(e){ ultimoError=e; console.error('No se pudo guardar en la nube:', e); }
+  }
+  prodEnviando=false;
+  if(ok){
+    // Solo se quita de la cola lo que efectivamente se mandó — si mientras el guardado
+    // viajaba se editó algo más, sigue pendiente para el próximo guardado.
+    dirtySnapshot.forEach(uid=>prodDirtyRows.delete(uid));
+    extraSnapshot.forEach(op=>{ const i=prodOpsExtra.indexOf(op); if(i>=0) prodOpsExtra.splice(i,1); });
+    prodSyncEstado='nube'; prodSyncDetalle='';
+    prodGuardarLocal();
+  } else{
+    prodSyncEstado='nube-error'; prodSyncDetalle=String(ultimoError&&ultimoError.message||ultimoError);
+    toast('No se pudo guardar en la nube. Revisa tu conexión — el cambio queda en este navegador y se reintenta.', 'error');
+  }
+  prodActualizarPildoraSync();
+  if(prodEnviarPendiente || prodDirtyRows.size || prodOpsExtra.length){ prodEnviarPendiente=false; prodEnviarNube(); }
+}
+/* Guardado COMPLETO (el modelo viejo, con "_ifRev"/conflicto) — se usa solo para acciones
+   deliberadas de reemplazar todo, como "Restaurar" un respaldo. Los guardados normales
+   de cada edición usan prodEnviarNube() (por parches) de arriba. */
+async function prodEnviarNubeCompleto(){
   prodSyncEstado='guardando'; prodActualizarPildoraSync();
   let ok=false, ultimoError=null, conflicto=null;
   for(let intento=0; intento<3 && !ok && !conflicto; intento++){
     if(intento>0) await new Promise(res=>setTimeout(res,2000));
     try{
       const payload=Object.assign({}, PRODUCCION, {_ifRev: PRODUCCION._rev});
-      const body=JSON.stringify(payload); // siempre el estado más reciente, en cada intento
+      const body=JSON.stringify(payload);
       const r=await fetch(PROD_SYNC_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body});
       if(!r.ok) throw new Error('HTTP '+r.status);
       const data=await r.json();
@@ -2733,23 +2780,18 @@ async function prodEnviarNube(){
       ok=true;
     }catch(e){ ultimoError=e; console.error('No se pudo guardar en la nube:', e); }
   }
-  prodEnviando=false;
   if(conflicto){
-    // Alguien más guardó algo más nuevo mientras tanto: adoptamos esa versión real y avisamos,
-    // en vez de arriesgarnos a pisarla.
     prodFusionarRemoto(conflicto);
     if(current==='produccion') render();
     prodSyncEstado='nube'; prodSyncDetalle='';
     toast('Otra pestaña o dispositivo guardó algo más nuevo — se actualizó esta vista. Revisa y vuelve a hacer tu cambio si hace falta.', 'error');
   } else if(ok){
-    prodSyncEstado='nube'; prodSyncDetalle='';
-    prodGuardarLocal();
+    prodSyncEstado='nube'; prodSyncDetalle=''; prodGuardarLocal();
   } else{
     prodSyncEstado='nube-error'; prodSyncDetalle=String(ultimoError&&ultimoError.message||ultimoError);
-    toast('No se pudo guardar en la nube. Revisa tu conexión — el cambio queda solo en este navegador por ahora.', 'error');
+    toast('No se pudo guardar en la nube. Revisa tu conexión.', 'error');
   }
   prodActualizarPildoraSync();
-  if(prodEnviarPendiente){ prodEnviarPendiente=false; prodEnviarNube(); }
 }
 async function prodSincronizarAhora(silencioso){
   if(prodSyncTimer || prodEnviando){
@@ -2799,7 +2841,12 @@ function prodFusionarRemoto(remoto){
   const existentes=new Set(PRODUCCION.rows.map(r=>r.uid));
   let huboNuevas=false;
   SEED_ROWS.forEach(sr=>{
-    if(!existentes.has(sr.uid) && !PRODUCCION.removedSeeds.includes(sr.uid)){ PRODUCCION.rows.push({...sr}); huboNuevas=true; }
+    if(!existentes.has(sr.uid) && !PRODUCCION.removedSeeds.includes(sr.uid)){
+      const nueva={...sr};
+      PRODUCCION.rows.push(nueva);
+      prodOpsExtra.push({op:'addRow', row:Object.assign({}, nueva), seq:PRODUCCION.seq});
+      huboNuevas=true;
+    }
   });
   normalizarProduccion(PRODUCCION);
   prodGuardarLocal();
@@ -2993,11 +3040,11 @@ window.addEventListener('resize', ()=>{ if(current==='produccion') prodAjustarSt
 
 function prodInput(el, uid, field){
   const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
-  r[field]=el.value; saveProduccion();
+  r[field]=el.value; prodMarcarSucio(uid); saveProduccion();
 }
 function prodInputFecha(el, uid){
   const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
-  r.fCom=el.value; saveProduccion();
+  r.fCom=el.value; prodMarcarSucio(uid); saveProduccion();
   const d=diasDif(r.fCom);
   const celda=document.getElementById('dif-'+uid);
   if(celda) celda.innerHTML = d==null? '<span class="muted">—</span>' : `<span class="prod-dif ${d<0?'late':'ok'}">${d}</span>`;
@@ -3015,11 +3062,11 @@ function prodCambiarTab(t){ prodTab=t; render(); }
 function prodFiltrarStat(k){ prodStatFiltro=(prodStatFiltro===k? null : k); render(); }
 function prodToggleFlag(uid, campo){
   const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
-  r[campo]=!r[campo]; saveProduccion(); render();
+  r[campo]=!r[campo]; prodMarcarSucio(uid); saveProduccion(); render();
 }
 function prodToggleEntregada(uid){
   const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
-  r.entregada=!r.entregada; saveProduccion(); render();
+  r.entregada=!r.entregada; prodMarcarSucio(uid); saveProduccion(); render();
   toast(r.entregada? 'Marcada como entregada.' : 'Marcada como vigente.');
 }
 function prodToggleSeleccion(uid){
@@ -3028,7 +3075,7 @@ function prodToggleSeleccion(uid){
 }
 function prodLimpiarSeleccion(){ prodSeleccion.clear(); render(); }
 function prodMarcarSeleccion(entregada){
-  PRODUCCION.rows.forEach(r=>{ if(prodSeleccion.has(r.uid)) r.entregada=entregada; });
+  PRODUCCION.rows.forEach(r=>{ if(prodSeleccion.has(r.uid)){ r.entregada=entregada; prodMarcarSucio(r.uid); } });
   saveProduccion(); prodSeleccion.clear(); render();
   toast(entregada? 'Filas marcadas como entregadas.' : 'Filas marcadas como vigentes.');
 }
@@ -3037,24 +3084,36 @@ function prodEliminarSeleccion(){
   confirmDialog(`¿Eliminar ${n} fila(s) seleccionada(s)?`, ()=>{
     prodSeleccion.forEach(uid=>{
       if(uid.indexOf('seed-')===0 && !PRODUCCION.removedSeeds.includes(uid)) PRODUCCION.removedSeeds.push(uid);
+      prodDirtyRows.delete(uid); // no tiene sentido mandar el campo si la fila se va a borrar
+      prodOpsExtra.push({op:'deleteRow', uid});
     });
     PRODUCCION.rows=PRODUCCION.rows.filter(r=>!prodSeleccion.has(r.uid));
     prodSeleccion.clear(); saveProduccion(); render(); toast('Filas eliminadas.');
   });
 }
+/* El id de una fila nueva se genera con hora+azar (no un contador simple) para que dos
+   dispositivos creando una fila "al mismo tiempo" nunca puedan terminar con el mismo id
+   y que uno le gane el puesto al otro sin querer. */
+function prodNuevoUid(){ return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function prodNuevaFila(){
-  PRODUCCION.rows.push({
-    uid:'r'+(PRODUCCION.seq++), ot:'', cliente:'', comuna:'', fCom:'', foto:'',
+  const fila={
+    uid:prodNuevoUid(), ot:'', cliente:'', comuna:'', fCom:'', foto:'',
     producto:'', medida:'', tela:'', cant:'', obs:'', etapa:'',
     sinOC:false, sublimacion:false, aplicada:false, entregada:false,
-  });
+  };
+  PRODUCCION.rows.push(fila);
+  PRODUCCION.seq=(PRODUCCION.seq||1)+1;
+  prodOpsExtra.push({op:'addRow', row:Object.assign({}, fila), seq:PRODUCCION.seq});
   saveProduccion(); render();
 }
 function prodEliminarFila(uid){
   confirmDialog('¿Eliminar esta fila de producción?', ()=>{
     PRODUCCION.rows=PRODUCCION.rows.filter(r=>r.uid!==uid);
     if(uid.indexOf('seed-')===0 && !PRODUCCION.removedSeeds.includes(uid)) PRODUCCION.removedSeeds.push(uid);
-    prodSeleccion.delete(uid); saveProduccion(); render(); toast('Fila eliminada.');
+    prodSeleccion.delete(uid);
+    prodDirtyRows.delete(uid);
+    prodOpsExtra.push({op:'deleteRow', uid});
+    saveProduccion(); render(); toast('Fila eliminada.');
   });
 }
 function prodSubirFoto(uid){
@@ -3063,7 +3122,7 @@ function prodSubirFoto(uid){
     const f=input.files[0]; if(!f) return;
     comprimirImagen(f, dataUrl=>{
       const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
-      r.foto=dataUrl; saveProduccion(); render();
+      r.foto=dataUrl; prodMarcarSucio(uid); saveProduccion(); render();
     });
   };
   input.click();
@@ -3081,7 +3140,7 @@ function prodAbrirFoto(uid){
   document.body.appendChild(bg);
   bg.querySelector('#pxCerrar').onclick=()=>bg.remove();
   bg.querySelector('#pxReemplazar').onclick=()=>{ bg.remove(); prodSubirFoto(uid); };
-  bg.querySelector('#pxQuitar').onclick=()=>{ r.foto=''; saveProduccion(); bg.remove(); render(); };
+  bg.querySelector('#pxQuitar').onclick=()=>{ r.foto=''; prodMarcarSucio(uid); saveProduccion(); bg.remove(); render(); };
   bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
 }
 /* ---------- Anexos: lista por fila → visualizador de solo lectura (nunca edición) ---------- */
@@ -3116,10 +3175,12 @@ function prodAgregarAnexoATodaOT(ot, anexo){
   PRODUCCION.anexosOT = PRODUCCION.anexosOT || {};
   const lista = PRODUCCION.anexosOT[ot] = PRODUCCION.anexosOT[ot] || [];
   lista.push(anexo);
+  prodOpsExtra.push({op:'addAnexo', ot, anexo});
 }
 function prodQuitarAnexoDeTodaOT(ot, anexoId){
   if(!PRODUCCION.anexosOT || !PRODUCCION.anexosOT[ot]) return;
   PRODUCCION.anexosOT[ot] = PRODUCCION.anexosOT[ot].filter(a=>a.id!==anexoId);
+  prodOpsExtra.push({op:'removeAnexo', ot, anexoId});
 }
 function prodQuitarAnexo(uid, idx){
   const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
@@ -3284,13 +3345,16 @@ function prodImportar(bg){
   let n=0;
   data.forEach(d=>{
     if(!d || typeof d!=='object') return;
-    PRODUCCION.rows.push({
-      uid:'r'+(PRODUCCION.seq++),
+    const fila={
+      uid:prodNuevoUid(),
       ot:d.ot||'', cliente:d.cliente||'', comuna:d.comuna||'', fCom:d.fCom||'',
       foto:d.foto||'', producto:d.producto||'', medida:d.medida||'', tela:d.tela||'',
       cant:(d.cant!=null?d.cant:''), obs:d.obs||'', etapa:d.etapa||'',
       sinOC:!!d.sinOC, sublimacion:!!d.sublimacion, aplicada:!!d.aplicada, entregada:!!d.entregada,
-    });
+    };
+    PRODUCCION.rows.push(fila);
+    PRODUCCION.seq=(PRODUCCION.seq||1)+1;
+    prodOpsExtra.push({op:'addRow', row:Object.assign({}, fila), seq:PRODUCCION.seq});
     n++;
   });
   saveProduccion(); bg.remove(); render();
@@ -3307,9 +3371,16 @@ function restoreProduccionFile(input){
     try{
       const data=JSON.parse(r.result);
       confirmDialog('¿Reemplazar todas las filas de producción actuales por las del respaldo?', ()=>{
-        PRODUCCION={seq:data.seq||1, rows:data.rows||[], removedSeeds:data.removedSeeds||[], anexosOT:data.anexosOT||{}};
+        PRODUCCION={seq:data.seq||1, rows:data.rows||[], removedSeeds:data.removedSeeds||[], anexosOT:data.anexosOT||{}, _rev:PRODUCCION._rev};
         normalizarProduccion(PRODUCCION);
-        saveProduccion(); render(); toast('Respaldo restaurado.');
+        // Esto es un reemplazo TOTAL deliberado (no una edición puntual): se manda completo,
+        // con el control de versión de siempre, y se descarta cualquier parche que hubiera
+        // quedado pendiente de antes (ya no aplica, se está reemplazando todo).
+        prodDirtyRows.clear(); prodOpsExtra=[];
+        clearTimeout(prodSyncTimer); prodSyncTimer=null;
+        prodGuardarLocal();
+        prodEnviarNubeCompleto();
+        render(); toast('Respaldo restaurado.');
       });
     }catch(e){ toast('Archivo inválido.','error'); }
   };
