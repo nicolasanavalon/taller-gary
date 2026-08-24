@@ -157,10 +157,7 @@
   .tela-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:8px}
   .tela-result{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin:6px 2px 16px;flex-wrap:wrap;gap:6px}
   .tela-result b{color:var(--ink)}
-  .crea-grid{display:grid;grid-template-columns:1.5fr 1fr 1.6fr;gap:10px;align-items:end;margin-bottom:16px}
-  .crea-check{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:700;color:var(--ink);padding-bottom:9px}
-  .crea-check input{width:16px;height:16px}
-  @media(max-width:760px){.tela-grid,.crea-grid{grid-template-columns:1fr}.crea-check{padding-bottom:0}}
+  @media(max-width:760px){.tela-grid{grid-template-columns:1fr}}
 
   /* ---------- Encabezado de ítem (miniatura + título + eliminar) ---------- */
   .item-card-head{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;flex:0 0 auto;
@@ -335,12 +332,13 @@
   /* Ítems en fila horizontal (uno al lado del otro) para poder comparar producto por producto,
      igual que las columnas del Excel de costeo. Se desplaza con scroll lateral.
      Todos los ítems se mueven junto con el scroll de toda la página (no tienen scroll propio). */
+  /* full-bleed: se sale del ancho máximo centrado de <main> para que el contenido
+     parta pegado al borde izquierdo de la pantalla, no al margen del contenido centrado */
+  .full-bleed{width:100vw;position:relative;left:50%;margin-left:-50vw;
+    padding-left:18px;padding-right:18px;box-sizing:border-box}
+  .cotdet-bleed{margin-bottom:18px}
   #itemsCot{display:flex;flex-direction:row;align-items:flex-start;gap:16px;
-    overflow-x:auto;padding-bottom:12px;scroll-snap-type:x proximity;
-    /* full-bleed: se sale del ancho máximo centrado de <main> para que el primer ítem
-       parta pegado al borde izquierdo de la pantalla, no al margen del contenido centrado */
-    width:100vw;position:relative;left:50%;margin-left:-50vw;
-    padding-left:18px;padding-right:18px}
+    overflow-x:auto;padding-bottom:12px;scroll-snap-type:x proximity}
   #itemsCot .item-card{flex:0 0 460px;width:460px;margin-bottom:0;scroll-snap-align:start;
     display:flex;flex-direction:column;padding-top:0}
   #itemsCot .item-card .item-body{padding:0 20px 20px}
@@ -1197,7 +1195,7 @@ function itemNuevo(){
   return {
     medida:'', cantidad:1, tipo:'', tipoProducto:'Bandera', foto:'',
     alto:'', ancho:'', tipoTela:'Bistrech', telaCosto:730,
-    creaActiva:false, creaCosto:730,
+    creaCant:1, creaCosto:730,
     tipoVaina:'Vaina de Lona', huinchaCosto:300, argollaCosto:200, argollaExtra:0,
     tipoAcabado:'Confección', armadoCosto:null, cortadoCosto:null, estrellaCosto:null, limpiezaCosto:null, sublimadoCosto:null,
     fletePct:0.10, finImpPct:0.06, margenPct:0.20,
@@ -1228,9 +1226,9 @@ function calcularTela(it){
   const telaCant = redondear1(telaCantExacta);
   const telaCosto = it.telaCosto!=null && it.telaCosto!=='' ? +it.telaCosto : 730;
   const telaSubtotal = telaCantExacta*telaCosto;
-  const creaActiva = it.creaActiva===true;
-  const creaCantExacta = creaActiva ? telaCantExacta/12 : 0;
-  const creaCant = redondear1(creaCantExacta);
+  const creaActiva = it.tipoAcabado==='Estrella';
+  const creaCantExacta = creaActiva ? (it.creaCant!=null && it.creaCant!=='' ? +it.creaCant : 1) : 0;
+  const creaCant = creaCantExacta;
   const creaCosto = it.creaCosto!=null && it.creaCosto!=='' ? +it.creaCosto : 730;
   const creaSubtotal = creaCantExacta*creaCosto;
   return {telaCant,telaCantExacta,telaCosto,telaSubtotal,creaActiva,creaCant,creaCantExacta,creaCosto,creaSubtotal};
@@ -1341,10 +1339,7 @@ function itemCardHTML(it, i){
     </div>
 
     <label>Tela</label>
-    <div class="grid2">
-      <div class="field"><label>Tipo de tela</label><input class="ci-tipotela" value="${esc(it.tipoTela||'Bistrech')}" placeholder="Bistrech"></div>
-      <label class="crea-check" style="padding-top:22px"><input type="checkbox" class="ci-creaactiva" ${r.creaActiva?'checked':''}> Aplica Crea (tela ÷ 12)</label>
-    </div>
+    <div class="field"><label>Tipo de tela</label><input class="ci-tipotela" value="${esc(it.tipoTela||'Bistrech')}" placeholder="Bistrech"></div>
     <div class="grid2">
       <div class="field"><label>Tipo de vaina</label><select class="ci-tipovaina">${TIPOS_VAINA.map(tv=>`<option ${((it.tipoVaina||'Vaina de Lona')===tv)?'selected':''}>${tv}</option>`).join('')}</select></div>
       <div class="field"><label>Especificación</label><select class="ci-tipoacabado">${TIPOS_ACABADO.map(ta=>`<option ${((it.tipoAcabado||'Confección')===ta)?'selected':''}>${ta}</option>`).join('')}</select></div>
@@ -1373,8 +1368,8 @@ function itemCardHTML(it, i){
       <div class="tela-subtotal right">${money(r.telaSubtotal)}</div>
     </div>
     <div class="tela-costeo-row">
-      <div>Crea</div>
-      <div><span class="crea-cant">${formatNumCL(r.creaCant,1)}</span> <span class="unidad">m</span></div>
+      <div>Estrella ${r.creaActiva?'':'<span class="muted">(no aplica: no es Estrella)</span>'}</div>
+      <div class="argolla-cant-cell"><input class="ci-creacant" type="number" min="0" step="1" value="${it.creaCant!=null&&it.creaCant!==''?it.creaCant:1}" ${r.creaActiva?'':'disabled'}> <span class="unidad">un.</span></div>
       <input class="ci-creacosto" type="number" step="1" value="${r.creaCosto}" ${r.creaActiva?'':'disabled'}>
       <div class="crea-subtotal right">${money(r.creaSubtotal)}</div>
     </div>
@@ -1512,16 +1507,18 @@ function renderDetalleCotizacion(c){
   const totales = calcularTotalesCotizacion(items);
   const margenPctTotal = totales.neto>0 ? totales.margen/totales.neto : 0;
   return `
-    <div class="backlink" onclick="cerrarDetalleCotizacion()">← Volver a Costos y Cotizaciones</div>
-    <div class="page-head">
-      <div class="icon">🧮</div>
-      <div style="flex:1"><h1>Cotización ${esc(c.id)} ${estadoBadge(c.estado||'Pendiente')}</h1>
-        <div class="sub">${esc(c.empresa)}${c.rut?' · RUT '+esc(c.rut):''}${c.contacto?' · '+esc(c.contacto):''}</div>
+    <div class="cotdet-bleed full-bleed">
+      <div class="backlink" onclick="cerrarDetalleCotizacion()">← Volver a Costos y Cotizaciones</div>
+      <div class="page-head">
+        <div class="icon">🧮</div>
+        <div style="flex:1"><h1>Cotización ${esc(c.id)} ${estadoBadge(c.estado||'Pendiente')}</h1>
+          <div class="sub">${esc(c.empresa)}${c.rut?' · RUT '+esc(c.rut):''}${c.contacto?' · '+esc(c.contacto):''}</div>
+        </div>
+        <button class="btn" onclick="guardarItemsCotizacion()">💾 Guardar cambios</button>
       </div>
-      <button class="btn" onclick="guardarItemsCotizacion()">💾 Guardar cambios</button>
     </div>
 
-    <div id="itemsCot">${items.map((it,i)=>itemCardHTML(it,i)).join('')}</div>
+    <div id="itemsCot" class="full-bleed">${items.map((it,i)=>itemCardHTML(it,i)).join('')}</div>
     <div class="row">
       <button class="btn ghost sm" id="addItemCot">+ Agregar ítem</button>
     </div>
@@ -1551,7 +1548,7 @@ function leerItemDeCard(card){
     ancho:anchoV,
     tipoTela:card.querySelector('.ci-tipotela').value.trim(),
     telaCosto:card.querySelector('.ci-telacosto').value,
-    creaActiva:card.querySelector('.ci-creaactiva').checked,
+    creaCant:card.querySelector('.ci-creacant').value,
     creaCosto:card.querySelector('.ci-creacosto').value,
     tipoVaina:card.querySelector('.ci-tipovaina').value,
     huinchaCosto:card.querySelector('.ci-huinchacosto').value,
@@ -1590,9 +1587,9 @@ function recalcCardDetalle(card){
   card.querySelector('.cs-margenpct').textContent=formatPct(r.precioUnitNeto>0?r.margenMonto/r.precioUnitNeto:0)+'%';
   card.querySelector('.tela-cant').textContent=formatNumCL(r.telaCant,1);
   card.querySelector('.tela-subtotal').textContent=money(r.telaSubtotal);
-  card.querySelector('.crea-cant').textContent=formatNumCL(r.creaCant,1);
   card.querySelector('.crea-subtotal').textContent=money(r.creaSubtotal);
   card.querySelector('.ci-creacosto').disabled=!r.creaActiva;
+  card.querySelector('.ci-creacant').disabled=!r.creaActiva;
   card.querySelector('.subtotal-telas').textContent=money(r.telaSubtotal+r.creaSubtotal);
   card.querySelector('.huincha-cant').textContent=formatNumCL(r.huinchaCant,1);
   card.querySelector('.huincha-subtotal').textContent=money(r.huinchaSubtotal);
