@@ -3024,7 +3024,6 @@ function prodFilaHtml(r, sep){
     <td>${prodAnexoHtml(r)}</td>
     <td><div class="prod-row-actions">
       <button class="prod-mini ghost" title="Traspasar a Impresión" onclick="prodTraspasarASublim('${r.uid}','impresion')">🖨️</button>
-      <button class="prod-mini ghost" title="Traspasar a Sublimación" onclick="prodTraspasarASublim('${r.uid}','sublimado')">🎨</button>
       <button class="prod-mini ok" title="${r.entregada?'Marcar vigente':'Marcar entregada'}" onclick="prodToggleEntregada('${r.uid}')">${r.entregada?'↩':'✓'}</button>
       <button class="prod-mini del" title="Eliminar fila" onclick="prodEliminarFila('${r.uid}')">🗑</button>
     </div></td>
@@ -3133,6 +3132,47 @@ function prodTraspasarASublim(uid, tabla){
   };
   bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
 }
+/* Flujo real del taller: primero se traspasa a Impresión (desde Producción), y de ahí,
+   cuando corresponda, se traspasa a Sublimación — sin borrar el registro de Impresión
+   (es historial), y arrastrando los metros ya cargados (editables igual después). */
+function sublimPasarASublimado(idImpresion){
+  const origen=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion.impresion||[]).find(x=>x.id===idImpresion);
+  if(!origen) return;
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box">
+    <h3 style="margin:0 0 4px;font-family:Georgia,serif">🎨 Pasar a Sublimación</h3>
+    <p class="muted" style="font-size:12.5px;margin:0 0 12px">${esc(origen.producto||'(sin producto)')} · OT ${esc(origen.ot)}</p>
+    <div class="grid2" style="gap:10px">
+      <div class="field" style="margin:0"><label>Cantidad</label><input id="psCant" type="number" value="${esc(origen.cant)}" min="0" style="width:100%"></div>
+      <div class="field" style="margin:0"><label>Metros</label><input id="psMetros" type="number" step="0.1" value="${esc(origen.metros)}" style="width:100%"></div>
+      <div class="field" style="margin:0"><label>Fecha</label><input id="psFecha" type="date" value="${todayISO()}" style="width:100%"></div>
+      <div class="field" style="margin:0"><label>N° Rollo</label><input id="psRollo" type="text" value="${esc(origen.rollo)}" style="width:100%"></div>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:14px;gap:8px">
+      <button class="btn ghost sm" id="psCancelar">Cancelar</button>
+      <button class="btn sm" id="psConfirmar">Traspasar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  bg.querySelector('#psCancelar').onclick=()=>bg.remove();
+  bg.querySelector('#psConfirmar').onclick=()=>{
+    const entry={
+      id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+      tipo:'item', orden:Date.now(),
+      fecha: bg.querySelector('#psFecha').value || todayISO(),
+      ot:origen.ot, cliente:origen.cliente, producto:origen.producto, medida:origen.medida, tela:origen.tela,
+      cant: bg.querySelector('#psCant').value, foto:origen.foto||'', obs:origen.obs||'',
+      rollo: bg.querySelector('#psRollo').value, metros: bg.querySelector('#psMetros').value,
+    };
+    PRODUCCION.sublimacion.sublimado = PRODUCCION.sublimacion.sublimado || [];
+    PRODUCCION.sublimacion.sublimado.push(entry);
+    prodOpsExtra.push({op:'addSublimEntry', tabla:'sublimado', entry});
+    saveProduccion(); render();
+    bg.remove();
+    toast('Traspasado a Sublimación. El registro de Impresión se mantiene.');
+  };
+  bg.addEventListener('click', ev=>{ if(ev.target===bg) bg.remove(); });
+}
 function sublimEditar(tabla, id, campo, valor){
   const lista=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion[tabla])||[];
   const e=lista.find(x=>x.id===id); if(!e) return;
@@ -3215,14 +3255,18 @@ function sublimBotonesOrden(tabla, e, esPrimero, esUltimo){
 }
 function sublimFilaHtml(tabla, e, esPrimero, esUltimo){
   const conRollo = tabla==='sublimado';
+  const colsBase = 7; // Foto, OT, Cliente, Producto, Medida, Tela, Cant
+  const colsExtra = conRollo? 3 : 2; // (Rollo+)Metros+Obs
   if(e.tipo==='nota'){
     return `<tr class="sublim-nota">
-      <td colspan="${conRollo?10:8}">
+      <td colspan="${colsBase+colsExtra}">
         <input value="${esc(e.mensaje)}" oninput="sublimEditar('${tabla}','${e.id}','mensaje',this.value)">
       </td>
       <td><div class="prod-row-actions">${sublimBotonesOrden(tabla,e,esPrimero,esUltimo)}<button class="prod-mini del" title="Quitar nota" onclick="sublimQuitar('${tabla}','${e.id}')">🗑</button></div></td>
     </tr>`;
   }
+  const accionPasar = tabla==='impresion'
+    ? `<button class="prod-mini ghost" title="Pasar a Sublimación (mantiene los metros)" onclick="sublimPasarASublimado('${e.id}')">🎨</button>` : '';
   return `<tr>
     <td>${e.foto? `<div class="prod-thumb-cell" onclick="sublimAbrirFoto('${tabla}','${e.id}')"><img src="${e.foto}"></div>` : `<div class="prod-thumb-cell" style="cursor:default"><span class="muted">—</span></div>`}</td>
     <td><input value="${esc(e.ot)}" oninput="sublimEditar('${tabla}','${e.id}','ot',this.value)" style="width:64px"></td>
@@ -3231,14 +3275,14 @@ function sublimFilaHtml(tabla, e, esPrimero, esUltimo){
     <td><input value="${esc(e.medida)}" oninput="sublimEditar('${tabla}','${e.id}','medida',this.value)" style="width:90px"></td>
     <td><input value="${esc(e.tela)}" oninput="sublimEditar('${tabla}','${e.id}','tela',this.value)" style="width:90px"></td>
     <td class="num"><input value="${esc(e.cant)}" oninput="sublimEditar('${tabla}','${e.id}','cant',this.value)" style="width:46px"></td>
-    ${conRollo? `<td><input value="${esc(e.rollo)}" oninput="sublimEditar('${tabla}','${e.id}','rollo',this.value)" style="width:70px" placeholder="N°"></td>
-    <td class="num"><input value="${esc(e.metros)}" oninput="sublimEditar('${tabla}','${e.id}','metros',this.value)" style="width:60px" placeholder="mts"></td>` : ''}
+    ${conRollo? `<td><input value="${esc(e.rollo)}" oninput="sublimEditar('${tabla}','${e.id}','rollo',this.value)" style="width:70px" placeholder="N°"></td>` : ''}
+    <td class="num"><input value="${esc(e.metros)}" oninput="sublimEditar('${tabla}','${e.id}','metros',this.value)" style="width:60px" placeholder="mts"></td>
     <td><input value="${esc(e.obs)}" oninput="sublimEditar('${tabla}','${e.id}','obs',this.value)" style="width:150px"></td>
-    <td><div class="prod-row-actions">${sublimBotonesOrden(tabla,e,esPrimero,esUltimo)}<button class="prod-mini del" title="Quitar registro" onclick="sublimQuitar('${tabla}','${e.id}')">🗑</button></div></td>
+    <td><div class="prod-row-actions">${accionPasar}${sublimBotonesOrden(tabla,e,esPrimero,esUltimo)}<button class="prod-mini del" title="Quitar registro" onclick="sublimQuitar('${tabla}','${e.id}')">🗑</button></div></td>
   </tr>`;
 }
 function sublimSubtotalHtml(tabla, rollo, metros){
-  const colspan = tabla==='sublimado' ? 11 : 9;
+  const colspan = tabla==='sublimado' ? 11 : 10;
   return `<tr class="sublim-subtotal"><td colspan="${colspan}">Subtotal rollo ${rollo? esc(rollo) : '(sin definir)'}: <b>${metros} mts</b></td></tr>`;
 }
 function sublimFilasDelDiaHtml(tabla, filas){
@@ -3268,7 +3312,7 @@ function sublimTablaHtml(tabla, titulo){
     <div class="sublim-bloque">
       <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
         <h2 style="margin:0;font-family:Georgia,serif;font-size:17px">${titulo}</h2>
-        ${conRollo? `<button class="btn ghost sm" onclick="sublimAgregarNota('${tabla}','${todayISO()}')">＋ Nota (cambio de rollo / corte)</button>` : ''}
+        <button class="btn ghost sm" onclick="sublimAgregarNota('${tabla}','${todayISO()}')">＋ Nota (cambio de rollo / corte)</button>
       </div>
       ${fechas.length? fechas.map(f=>{
         const filas=porFecha[f].slice().sort((a,b)=>(a.orden||0)-(b.orden||0));
@@ -3277,15 +3321,15 @@ function sublimTablaHtml(tabla, titulo){
         return `
         <div class="sublim-dia">
           <div class="sublim-dia-head">${esc(fechaLegibleCorta(f))}
-            <span class="muted">· ${totalCant} unid.${conRollo?` · ${totalMetros} mts`:''} · ${filas.length} registro${filas.length===1?'':'s'}</span>
-            ${conRollo? `<button class="btn ghost sm" style="margin-left:10px;padding:3px 9px;font-size:11.5px" onclick="sublimAgregarNota('${tabla}','${f}')">＋ Nota aquí</button>` : ''}
+            <span class="muted">· ${totalCant} unid. · ${totalMetros} mts · ${filas.length} registro${filas.length===1?'':'s'}</span>
+            <button class="btn ghost sm" style="margin-left:10px;padding:3px 9px;font-size:11.5px" onclick="sublimAgregarNota('${tabla}','${f}')">＋ Nota aquí</button>
           </div>
           <div class="sublim-table-wrap"><table class="sublim-table">
-            <thead><tr><th>Foto</th><th>OT</th><th>Cliente</th><th>Producto</th><th>Medida</th><th>Tela</th><th>Cant</th>${conRollo?'<th>Rollo</th><th>Metros</th>':''}<th>Obs</th><th></th></tr></thead>
+            <thead><tr><th>Foto</th><th>OT</th><th>Cliente</th><th>Producto</th><th>Medida</th><th>Tela</th><th>Cant</th>${conRollo?'<th>Rollo</th>':''}<th>Metros</th><th>Obs</th><th></th></tr></thead>
             <tbody>${sublimFilasDelDiaHtml(tabla, filas)}</tbody>
           </table></div>
         </div>`;
-      }).join('') : `<div class="muted" style="padding:14px 2px;font-size:13px">Sin registros todavía. Usa los botones 🖨️/🎨 en Producción para traspasar.</div>`}
+      }).join('') : `<div class="muted" style="padding:14px 2px;font-size:13px">Sin registros todavía. ${tabla==='impresion'?'Usa el botón 🖨️ en Producción para traspasar.':'Traspasa desde Impresión con el botón 🎨.'}</div>`}
     </div>`;
 }
 function fechaLegibleCorta(iso){
