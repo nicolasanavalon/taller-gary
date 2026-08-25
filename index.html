@@ -283,6 +283,23 @@
   /* Modo compacto de Producción: oculta también el logo y el menú de arriba, para que quede casi solo la tabla. */
   body.prod-hide-chrome header,body.prod-hide-chrome nav{display:none}
   body.prod-hide-chrome main{padding-top:10px}
+  /* ---------- Sublimación: historial diario ---------- */
+  .sublim-bloque{margin-bottom:26px}
+  .sublim-dia{margin-bottom:16px;background:#fff;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+  .sublim-dia-head{padding:9px 14px;background:var(--gold-soft);font-weight:700;font-size:13px;color:var(--gold-d);
+    text-transform:capitalize}
+  .sublim-table-wrap{overflow-x:auto}
+  table.sublim-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:900px}
+  .sublim-table thead th{background:#faf7ef;color:var(--muted);font-weight:700;font-size:10.5px;
+    text-transform:uppercase;letter-spacing:.3px;text-align:left;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .sublim-table td{padding:6px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .sublim-table tr:last-child td{border-bottom:none}
+  .sublim-table input,.sublim-table textarea{width:100%;border:1px solid transparent;border-radius:7px;padding:5px 6px;
+    font-size:12.5px;font-family:inherit;background:transparent}
+  .sublim-table input:hover,.sublim-table textarea:hover{border-color:var(--line)}
+  .sublim-table input:focus,.sublim-table textarea:focus{border-color:var(--gold);background:#fff;outline:none}
+  .sublim-table textarea{resize:none;height:38px;line-height:1.3}
+  .sublim-table td.num input{text-align:center}
   .ot-doc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
   .ot-doc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px;margin-bottom:16px}
   .ot-doc-grid label{margin-bottom:2px}
@@ -443,6 +460,18 @@ const MODULES = [
       ['Control de entrega','Marcar cuándo cada trabajo queda terminado y listo para entregar.'],
     ]},
 
+  { id:'sublimacion', nav:'Sublimación', icon:'🖨️', stage:'4 · Producción',
+    title:'Sublimación',
+    desc:'Historial diario de lo impreso y lo sublimado.',
+    status:'ready',
+    intro:'Registro histórico, día por día, de qué banderas se imprimieron y cuáles se sublimaron — con el mismo detalle que Producción.',
+    conn:'← se alimenta de "Producción" (botones Imprimir/Sublimar en cada fila)',
+    feats:[
+      ['Dos tablas','Impresión y Sublimación, cada una agrupada por día.'],
+      ['Traspaso parcial','Se puede traspasar solo una parte de la cantidad de una fila (ej. la mitad se imprime, la mitad se sublima).'],
+      ['Historial editable','Cada registro se puede corregir o eliminar si hubo un error.'],
+    ]},
+
   { id:'facturacion', nav:'Facturación y Pagos', icon:'🧾', stage:'5 · Facturación y pagos',
     title:'Facturación y Pagos',
     desc:'Emisión y recepción de facturas (DTE/SII) y control de cobros y pagos.',
@@ -507,6 +536,7 @@ function render(){
     if(wrapDespues && scrollWrap!=null) wrapDespues.scrollTop=scrollWrap;
     window.scrollTo(0, scrollY);
   }
+  if(current==='sublimacion') prodActualizarPildoraSync();
 }
 
 function renderInicio(){
@@ -2255,6 +2285,7 @@ function renderMercado(m){
 
 function renderModule(m){
   if(m.id==='produccion'){ return renderProduccion(m); }
+  if(m.id==='sublimacion'){ return renderSublimacion(m); }
   if(m.id==='costos'){ return renderCostos(m); }
   if(m.id==='mercado'){ return renderMercado(m); }
   return `
@@ -2647,13 +2678,16 @@ const SEED_ROWS=[
     obs:'Con huincha poliester y argollas', etapa:'', sinOC:false, sublimacion:false, aplicada:true, entregada:false,
     },
 ];
-function seedProduccion(){ return {seq:1, rows:[], removedSeeds:[], anexosOT:{}}; }
+function seedProduccion(){ return {seq:1, rows:[], removedSeeds:[], anexosOT:{}, sublimacion:{impresion:[], sublimado:[]}}; }
 /* Los anexos ya NO viven pegados a cada fila (eso duplicaba el mismo archivo N veces —
    una por cada producto de la OT — e hizo que la nube pesara más de 40MB y dejara de
    sincronizar en el celular). Ahora viven UNA sola vez por OT en PRODUCCION.anexosOT. */
 function prodAnexosDe(ot){ return (PRODUCCION.anexosOT && PRODUCCION.anexosOT[ot]) || []; }
 function normalizarProduccion(data){
   data.anexosOT = data.anexosOT || {};
+  data.sublimacion = data.sublimacion || {impresion:[], sublimado:[]};
+  data.sublimacion.impresion = data.sublimacion.impresion || [];
+  data.sublimacion.sublimado = data.sublimacion.sublimado || [];
   data.rows.forEach(r=>{
     if(r.aplicada==null) r.aplicada=false;
     // Migración: si esta fila trae anexos "a la antigua" (pegados a la fila), se
@@ -2675,7 +2709,7 @@ function loadProduccion(){
   let data;
   try{ const raw=localStorage.getItem(KEY_PRODUCCION); data = raw? JSON.parse(raw) : seedProduccion(); }
   catch(e){ console.error(e); data=seedProduccion(); }
-  data.rows = data.rows||[]; data.removedSeeds = data.removedSeeds||[]; data.anexosOT = data.anexosOT||{};
+  data.rows = data.rows||[]; data.removedSeeds = data.removedSeeds||[]; data.anexosOT = data.anexosOT||{}; data.sublimacion = data.sublimacion||{impresion:[], sublimado:[]};
   const existentes=new Set(data.rows.map(r=>r.uid));
   SEED_ROWS.forEach(sr=>{
     if(!existentes.has(sr.uid) && !data.removedSeeds.includes(sr.uid)) data.rows.push({...sr});
@@ -2722,8 +2756,10 @@ function prodGuardarLocal(){
    distintas al mismo tiempo ya nunca chocan, y el guardado pesa unos bytes en vez de
    varios MB — mucho más rápido. */
 let prodDirtyRows=new Set();  // uids de filas con cambios de campo sin mandar todavía
-let prodOpsExtra=[];          // agregar fila / borrar fila / agregar o quitar anexo, en orden
+let prodDirtySublim=new Set(); // "tabla|id" de registros de Sublimación con cambios sin mandar
+let prodOpsExtra=[];          // agregar fila / borrar fila / agregar o quitar anexo o registro, en orden
 function prodMarcarSucio(uid){ prodDirtyRows.add(uid); }
+function prodMarcarSucioSublim(tabla, id){ prodDirtySublim.add(tabla+'|'+id); }
 function saveProduccion(){
   prodGuardarLocal();
   prodSyncEstado='guardando'; prodActualizarPildoraSync();
@@ -2734,11 +2770,18 @@ async function prodEnviarNube(){
   prodSyncTimer=null;
   if(prodEnviando){ prodEnviarPendiente=true; prodSyncEstado='guardando'; prodActualizarPildoraSync(); return; }
   const dirtySnapshot=new Set(prodDirtyRows);
+  const dirtySublimSnapshot=new Set(prodDirtySublim);
   const extraSnapshot=prodOpsExtra.slice();
   const ops=extraSnapshot.slice();
   dirtySnapshot.forEach(uid=>{
     const r=PRODUCCION.rows.find(x=>x.uid===uid);
     if(r) ops.push({op:'setRow', uid, fields:Object.assign({}, r)});
+  });
+  dirtySublimSnapshot.forEach(key=>{
+    const [tabla,id]=key.split('|');
+    const lista=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion[tabla])||[];
+    const e=lista.find(x=>x.id===id);
+    if(e) ops.push({op:'setSublimEntry', tabla, id, fields:Object.assign({}, e)});
   });
   if(!ops.length){ prodSyncEstado='nube'; prodActualizarPildoraSync(); return; }
   prodEnviando=true;
@@ -2760,6 +2803,7 @@ async function prodEnviarNube(){
     // Solo se quita de la cola lo que efectivamente se mandó — si mientras el guardado
     // viajaba se editó algo más, sigue pendiente para el próximo guardado.
     dirtySnapshot.forEach(uid=>prodDirtyRows.delete(uid));
+    dirtySublimSnapshot.forEach(key=>prodDirtySublim.delete(key));
     extraSnapshot.forEach(op=>{ const i=prodOpsExtra.indexOf(op); if(i>=0) prodOpsExtra.splice(i,1); });
     prodSyncEstado='nube'; prodSyncDetalle='';
     prodGuardarLocal();
@@ -2768,7 +2812,7 @@ async function prodEnviarNube(){
     toast('No se pudo guardar en la nube. Revisa tu conexión — el cambio queda en este navegador y se reintenta.', 'error');
   }
   prodActualizarPildoraSync();
-  if(prodEnviarPendiente || prodDirtyRows.size || prodOpsExtra.length){ prodEnviarPendiente=false; prodEnviarNube(); }
+  if(prodEnviarPendiente || prodDirtyRows.size || prodDirtySublim.size || prodOpsExtra.length){ prodEnviarPendiente=false; prodEnviarNube(); }
 }
 /* Guardado COMPLETO (el modelo viejo, con "_ifRev"/conflicto) — se usa solo para acciones
    deliberadas de reemplazar todo, como "Restaurar" un respaldo. Los guardados normales
@@ -2791,7 +2835,7 @@ async function prodEnviarNubeCompleto(){
   }
   if(conflicto){
     prodFusionarRemoto(conflicto);
-    if(current==='produccion') render();
+    if(current==='produccion' || current==='sublimacion') render();
     prodSyncEstado='nube'; prodSyncDetalle='';
     toast('Otra pestaña o dispositivo guardó algo más nuevo — se actualizó esta vista. Revisa y vuelve a hacer tu cambio si hace falta.', 'error');
   } else if(ok){
@@ -2828,7 +2872,7 @@ async function prodSincronizarAhora(silencioso){
     const n=(remoto.rows||[]).length;
     const huboNuevas=prodFusionarRemoto(remoto);
     prodSyncEstado='nube'; prodSyncDetalle=''; prodActualizarPildoraSync();
-    if(current==='produccion') render();
+    if(current==='produccion' || current==='sublimacion') render();
     if(huboNuevas) saveProduccion(); // solo si el merge trajo filas nuevas (ej. una OT que agregué yo) que aún no están en la nube
     else prodGuardarLocal();
     if(!silencioso) toast('Sincronizado: '+n+' fila(s) desde la nube.');
@@ -2845,6 +2889,7 @@ function prodFusionarRemoto(remoto){
     rows: remoto.rows,
     removedSeeds: remoto.removedSeeds || PRODUCCION.removedSeeds || [],
     anexosOT: remoto.anexosOT || {},
+    sublimacion: remoto.sublimacion || {impresion:[], sublimado:[]},
     _rev: remoto._rev||0,
   };
   const existentes=new Set(PRODUCCION.rows.map(r=>r.uid));
@@ -2861,12 +2906,12 @@ function prodFusionarRemoto(remoto){
   prodGuardarLocal();
   return huboNuevas;
 }
-if(!prodSyncPoll) prodSyncPoll=setInterval(()=>{ if(current==='produccion') prodSincronizarAhora(true); }, 20000);
+if(!prodSyncPoll) prodSyncPoll=setInterval(()=>{ if(current==='produccion' || current==='sublimacion') prodSincronizarAhora(true); }, 20000);
 // Si la pestaña estuvo en segundo plano (minimizada, otra pestaña activa, celular bloqueado)
 // puede quedar rato sin sondear. Al volver a primer plano se fuerza un refresco inmediato,
 // para no arrastrar datos viejos hasta el próximo guardado.
 document.addEventListener('visibilitychange', ()=>{
-  if(!document.hidden && current==='produccion') prodSincronizarAhora(true);
+  if(!document.hidden && (current==='produccion' || current==='sublimacion')) prodSincronizarAhora(true);
 });
 let PRODUCCION = loadProduccion();
 // OJO: nunca se guarda/publica nada acá al cargar la página — solo se lee. La carga local
@@ -2964,6 +3009,8 @@ function prodFilaHtml(r, sep){
     <td><textarea class="prod-ta" rows="2" oninput="prodInput(this,'${r.uid}','etapa')" style="width:130px" placeholder="Status">${esc(r.etapa)}</textarea></td>
     <td>${prodAnexoHtml(r)}</td>
     <td><div class="prod-row-actions">
+      <button class="prod-mini ghost" title="Traspasar a Impresión" onclick="prodTraspasarASublim('${r.uid}','impresion')">🖨️</button>
+      <button class="prod-mini ghost" title="Traspasar a Sublimación" onclick="prodTraspasarASublim('${r.uid}','sublimado')">🎨</button>
       <button class="prod-mini ok" title="${r.entregada?'Marcar vigente':'Marcar entregada'}" onclick="prodToggleEntregada('${r.uid}')">${r.entregada?'↩':'✓'}</button>
       <button class="prod-mini del" title="Eliminar fila" onclick="prodEliminarFila('${r.uid}')">🗑</button>
     </div></td>
@@ -3028,6 +3075,128 @@ function renderProduccion(m){
       </table>
     </div>
     <div class="row" style="margin-top:12px"><button class="btn ghost sm" onclick="prodNuevaFila()">+ Agregar fila</button></div>
+  `;
+}
+/* ---------- Sublimación: historial diario de Impresión y Sublimación ----------
+   Se alimenta desde Producción (botones 🖨️/🎨 en cada fila). Cada traspaso es una
+   COPIA con fecha y cantidad propias — la fila de Producción no se toca. Como una
+   fila puede repartirse (mitad impresa, mitad sublimada, o en días distintos), se
+   puede traspasar la misma fila varias veces. */
+function prodTraspasarASublim(uid, tabla){
+  const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
+  const titulo = tabla==='impresion' ? '🖨️ Traspasar a Impresión' : '🎨 Traspasar a Sublimación';
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box">
+    <h3 style="margin:0 0 4px;font-family:Georgia,serif">${titulo}</h3>
+    <p class="muted" style="font-size:12.5px;margin:0 0 12px">${esc(r.producto||'(sin producto)')} · OT ${esc(r.ot)}</p>
+    <div class="grid2" style="gap:10px">
+      <div class="field" style="margin:0"><label>Cantidad</label><input id="stCant" type="number" value="${esc(r.cant)}" min="0" style="width:100%"></div>
+      <div class="field" style="margin:0"><label>Fecha</label><input id="stFecha" type="date" value="${todayISO()}" style="width:100%"></div>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:14px;gap:8px">
+      <button class="btn ghost sm" id="stCancelar">Cancelar</button>
+      <button class="btn sm" id="stConfirmar">Traspasar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  bg.querySelector('#stCancelar').onclick=()=>bg.remove();
+  bg.querySelector('#stConfirmar').onclick=()=>{
+    const cant=bg.querySelector('#stCant').value;
+    const fecha=bg.querySelector('#stFecha').value || todayISO();
+    const entry={
+      id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+      fecha, ot:r.ot, cliente:r.cliente, producto:r.producto, medida:r.medida, tela:r.tela,
+      cant, foto:r.foto||'', obs:r.obs||'',
+    };
+    PRODUCCION.sublimacion = PRODUCCION.sublimacion || {impresion:[], sublimado:[]};
+    PRODUCCION.sublimacion[tabla] = PRODUCCION.sublimacion[tabla] || [];
+    PRODUCCION.sublimacion[tabla].push(entry);
+    prodOpsExtra.push({op:'addSublimEntry', tabla, entry});
+    saveProduccion();
+    bg.remove();
+    toast((tabla==='impresion'?'Agregado a Impresión':'Agregado a Sublimación')+' del '+fecha+'.');
+  };
+  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
+}
+function sublimEditar(tabla, id, campo, valor){
+  const lista=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion[tabla])||[];
+  const e=lista.find(x=>x.id===id); if(!e) return;
+  e[campo]=valor;
+  prodMarcarSucioSublim(tabla, id);
+  saveProduccion();
+}
+function sublimQuitar(tabla, id){
+  confirmDialog('¿Quitar este registro del historial?', ()=>{
+    PRODUCCION.sublimacion[tabla]=(PRODUCCION.sublimacion[tabla]||[]).filter(e=>e.id!==id);
+    prodDirtySublim.delete(tabla+'|'+id);
+    prodOpsExtra.push({op:'removeSublimEntry', tabla, id});
+    saveProduccion();
+    document.querySelector('.confirm-bg')?.remove();
+    render();
+    toast('Registro eliminado.');
+  });
+}
+function sublimAbrirFoto(tabla, id){
+  const lista=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion[tabla])||[];
+  const e=lista.find(x=>x.id===id); if(!e || !e.foto) return;
+  const bg=document.createElement('div'); bg.className='prod-lightbox';
+  bg.innerHTML=`<div style="text-align:center"><img src="${e.foto}">
+    <div class="row" style="justify-content:center;margin-top:12px"><button class="btn sm" id="svCerrar">Cerrar</button></div></div>`;
+  document.body.appendChild(bg);
+  bg.querySelector('#svCerrar').onclick=()=>bg.remove();
+  bg.addEventListener('click', ev=>{ if(ev.target===bg) bg.remove(); });
+}
+function sublimFilaHtml(tabla, e){
+  return `<tr>
+    <td>${e.foto? `<div class="prod-thumb-cell" onclick="sublimAbrirFoto('${tabla}','${e.id}')"><img src="${e.foto}"></div>` : `<div class="prod-thumb-cell" style="cursor:default"><span class="muted">—</span></div>`}</td>
+    <td><input value="${esc(e.ot)}" oninput="sublimEditar('${tabla}','${e.id}','ot',this.value)" style="width:64px"></td>
+    <td><input value="${esc(e.cliente)}" oninput="sublimEditar('${tabla}','${e.id}','cliente',this.value)" style="width:120px"></td>
+    <td><textarea class="prod-ta" rows="2" oninput="sublimEditar('${tabla}','${e.id}','producto',this.value)" style="width:160px">${esc(e.producto)}</textarea></td>
+    <td><input value="${esc(e.medida)}" oninput="sublimEditar('${tabla}','${e.id}','medida',this.value)" style="width:90px"></td>
+    <td><input value="${esc(e.tela)}" oninput="sublimEditar('${tabla}','${e.id}','tela',this.value)" style="width:90px"></td>
+    <td class="num"><input value="${esc(e.cant)}" oninput="sublimEditar('${tabla}','${e.id}','cant',this.value)" style="width:46px"></td>
+    <td><input value="${esc(e.obs)}" oninput="sublimEditar('${tabla}','${e.id}','obs',this.value)" style="width:150px"></td>
+    <td><div class="prod-row-actions"><button class="prod-mini del" title="Quitar registro" onclick="sublimQuitar('${tabla}','${e.id}')">🗑</button></div></td>
+  </tr>`;
+}
+function sublimTablaHtml(tabla, titulo){
+  const entradas=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion[tabla])||[];
+  const porFecha={};
+  entradas.forEach(e=>{ const f=e.fecha||'(sin fecha)'; (porFecha[f]=porFecha[f]||[]).push(e); });
+  const fechas=Object.keys(porFecha).sort((a,b)=> a<b?1:(a>b?-1:0));
+  return `
+    <div class="sublim-bloque">
+      <h2 style="margin:0 0 10px;font-family:Georgia,serif;font-size:17px">${titulo}</h2>
+      ${fechas.length? fechas.map(f=>{
+        const filas=porFecha[f];
+        const totalCant=filas.reduce((s,e)=>s+(Number(e.cant)||0),0);
+        return `
+        <div class="sublim-dia">
+          <div class="sublim-dia-head">${esc(fechaLegibleCorta(f))} <span class="muted">· ${totalCant} unid. · ${filas.length} registro${filas.length===1?'':'s'}</span></div>
+          <div class="sublim-table-wrap"><table class="sublim-table">
+            <thead><tr><th>Foto</th><th>OT</th><th>Cliente</th><th>Producto</th><th>Medida</th><th>Tela</th><th>Cant</th><th>Obs</th><th></th></tr></thead>
+            <tbody>${filas.map(e=>sublimFilaHtml(tabla,e)).join('')}</tbody>
+          </table></div>
+        </div>`;
+      }).join('') : `<div class="muted" style="padding:14px 2px;font-size:13px">Sin registros todavía. Usa los botones 🖨️/🎨 en Producción para traspasar.</div>`}
+    </div>`;
+}
+function fechaLegibleCorta(iso){
+  if(!iso || iso==='(sin fecha)') return 'Sin fecha';
+  const [y,m,d]=iso.split('-');
+  if(!y||!m||!d) return iso;
+  const dt=new Date(Number(y),Number(m)-1,Number(d));
+  return dt.toLocaleDateString('es-CL',{weekday:'long', day:'numeric', month:'long'});
+}
+function renderSublimacion(m){
+  return `
+    <div class="backlink" onclick="go('inicio')">← Volver al inicio</div>
+    <div class="prod-head">
+      <div><h1>${m.icon} ${m.title}</h1><div class="sub">${m.desc}</div>
+        <span id="prodSyncPill" class="pill prod-cloud-pill" onclick="prodSincronizarAhora(false)" title="Tocar para sincronizar ahora"></span></div>
+    </div>
+    ${sublimTablaHtml('impresion','🖨️ Impresión')}
+    ${sublimTablaHtml('sublimado','🎨 Sublimación')}
   `;
 }
 function bindProduccion(){
@@ -3380,7 +3549,7 @@ function restoreProduccionFile(input){
     try{
       const data=JSON.parse(r.result);
       confirmDialog('¿Reemplazar todas las filas de producción actuales por las del respaldo?', ()=>{
-        PRODUCCION={seq:data.seq||1, rows:data.rows||[], removedSeeds:data.removedSeeds||[], anexosOT:data.anexosOT||{}, _rev:PRODUCCION._rev};
+        PRODUCCION={seq:data.seq||1, rows:data.rows||[], removedSeeds:data.removedSeeds||[], anexosOT:data.anexosOT||{}, sublimacion:data.sublimacion||{impresion:[],sublimado:[]}, _rev:PRODUCCION._rev};
         normalizarProduccion(PRODUCCION);
         // Esto es un reemplazo TOTAL deliberado (no una edición puntual): se manda completo,
         // con el control de versión de siempre, y se descarta cualquier parche que hubiera
