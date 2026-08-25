@@ -521,7 +521,7 @@ function badge(status){
 /* ============================ RENDER ============================ */
 function render(){
   const app=document.getElementById('app');
-  app.className = current==='produccion' ? 'prod-main' : '';
+  app.className = (current==='produccion' || current==='sublimacion') ? 'prod-main' : '';
   if(current!=='produccion') document.body.classList.remove('prod-hide-chrome');
   if(current==='inicio'){ app.innerHTML=renderInicio(); bindCards(); return; }
   const m=MODULES.find(x=>x.id===current);
