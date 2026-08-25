@@ -3214,6 +3214,7 @@ function sublimAgregarNota(tabla, fecha){
     <div class="row" style="gap:8px;margin-bottom:10px">
       <button class="btn ghost sm" id="snRollo">🔄 Cambio de rollo</button>
       <button class="btn ghost sm" id="snCorte">✂️ Corte</button>
+      <button class="btn ghost sm" id="snBlanco">⬜ Blanco</button>
     </div>
     <div class="field" style="margin:0"><label>O escribe otro mensaje</label>
       <input id="snTexto" type="text" placeholder="Ej: Se acabó el rollo 4"></div>
@@ -3235,6 +3236,7 @@ function sublimAgregarNota(tabla, fecha){
   };
   bg.querySelector('#snRollo').onclick=()=>guardar('🔄 Cambio de rollo');
   bg.querySelector('#snCorte').onclick=()=>guardar('✂️ Corte');
+  bg.querySelector('#snBlanco').onclick=()=>guardar('⬜ Blanco');
   bg.querySelector('#snConfirmar').onclick=()=>guardar(bg.querySelector('#snTexto').value.trim());
   bg.querySelector('#snCancelar').onclick=()=>bg.remove();
   bg.addEventListener('click', ev=>{ if(ev.target===bg) bg.remove(); });
