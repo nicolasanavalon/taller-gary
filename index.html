@@ -304,6 +304,9 @@
   .sublim-table tr.sublim-nota input{font-style:italic;font-weight:700;color:var(--gold-d)}
   .sublim-table tr.sublim-subtotal td{background:var(--gold-soft);font-weight:700;font-size:12px;
     color:var(--gold-d);padding:7px 8px;text-align:right}
+  .sublim-rollo-box{margin:0 12px 14px;background:#fffef9;border-radius:10px;box-shadow:inset 0 0 0 1px var(--gold-line);overflow:hidden}
+  .sublim-rollo-box:last-child{margin-bottom:12px}
+  .sublim-rollo-head{padding:7px 12px;background:#f6efdb;font-weight:700;font-size:12px;color:var(--gold-d)}
   .ot-doc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
   .ot-doc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px;margin-bottom:16px}
   .ot-doc-grid label{margin-bottom:2px}
@@ -3304,6 +3307,35 @@ function sublimFilasDelDiaHtml(tabla, filas){
   if(conRollo && huboItem) html+=sublimSubtotalHtml(tabla, rolloActual, metrosAcum);
   return html;
 }
+function sublimEncabezadoTabla(conRollo){
+  return `<thead><tr><th>Foto</th><th>OT</th><th>Cliente</th><th>Producto</th><th>Medida</th><th>Tela</th><th>Cant</th>${conRollo?'<th>Rollo</th>':''}<th>Metros</th><th>Obs</th><th></th></tr></thead>`;
+}
+/* Impresión no lleva número de rollo escrito a mano — el propio marcador "🔄 Cambio de
+   rollo" separa un cuadro del siguiente (1 cuadro = 1 rollo). "✂️ Corte" y "⬜ Blanco"
+   van adentro del cuadro, como fila normal entre las banderas. */
+function sublimCajasImpresionHtml(filas){
+  const cajas=[[]]; const notaInicio=[null];
+  filas.forEach(e=>{
+    if(e.tipo==='nota' && e.mensaje==='🔄 Cambio de rollo'){
+      cajas.push([]); notaInicio.push(e);
+    } else {
+      cajas[cajas.length-1].push(e);
+    }
+  });
+  return cajas.map((caja,i)=>{
+    const totalMetros=caja.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(Number(e.metros)||0),0);
+    const totalCant=caja.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(Number(e.cant)||0),0);
+    const quitarDivision = notaInicio[i]
+      ? `<button class="prod-mini del" title="Quitar división de rollo (se junta con el anterior)" onclick="sublimQuitar('impresion','${notaInicio[i].id}')" style="margin-left:8px">🗑 unir con anterior</button>` : '';
+    return `<div class="sublim-rollo-box">
+      <div class="sublim-rollo-head">🧻 Rollo ${i+1} <span class="muted">· ${totalCant} unid. · ${totalMetros} mts</span>${quitarDivision}</div>
+      <div class="sublim-table-wrap"><table class="sublim-table">
+        ${sublimEncabezadoTabla(false)}
+        <tbody>${caja.length? caja.map((e,idx)=>sublimFilaHtml('impresion',e,idx===0,idx===caja.length-1)).join('') : `<tr><td colspan="10" class="muted" style="text-align:center;padding:10px">Vacío</td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+  }).join('');
+}
 function sublimTablaHtml(tabla, titulo){
   const entradas=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion[tabla])||[];
   const conRollo = tabla==='sublimado';
@@ -3314,7 +3346,7 @@ function sublimTablaHtml(tabla, titulo){
     <div class="sublim-bloque">
       <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
         <h2 style="margin:0;font-family:Georgia,serif;font-size:17px">${titulo}</h2>
-        <button class="btn ghost sm" onclick="sublimAgregarNota('${tabla}','${todayISO()}')">＋ Nota (cambio de rollo / corte)</button>
+        <button class="btn ghost sm" onclick="sublimAgregarNota('${tabla}','${todayISO()}')">＋ Nota (cambio de rollo / corte / blanco)</button>
       </div>
       ${fechas.length? fechas.map(f=>{
         const filas=porFecha[f].slice().sort((a,b)=>(a.orden||0)-(b.orden||0));
@@ -3326,10 +3358,11 @@ function sublimTablaHtml(tabla, titulo){
             <span class="muted">· ${totalCant} unid. · ${totalMetros} mts · ${filas.length} registro${filas.length===1?'':'s'}</span>
             <button class="btn ghost sm" style="margin-left:10px;padding:3px 9px;font-size:11.5px" onclick="sublimAgregarNota('${tabla}','${f}')">＋ Nota aquí</button>
           </div>
+          ${tabla==='impresion' ? sublimCajasImpresionHtml(filas) : `
           <div class="sublim-table-wrap"><table class="sublim-table">
-            <thead><tr><th>Foto</th><th>OT</th><th>Cliente</th><th>Producto</th><th>Medida</th><th>Tela</th><th>Cant</th>${conRollo?'<th>Rollo</th>':''}<th>Metros</th><th>Obs</th><th></th></tr></thead>
+            ${sublimEncabezadoTabla(conRollo)}
             <tbody>${sublimFilasDelDiaHtml(tabla, filas)}</tbody>
-          </table></div>
+          </table></div>`}
         </div>`;
       }).join('') : `<div class="muted" style="padding:14px 2px;font-size:13px">Sin registros todavía. ${tabla==='impresion'?'Usa el botón 🖨️ en Producción para traspasar.':'Traspasa desde Impresión con el botón 🎨.'}</div>`}
     </div>`;
