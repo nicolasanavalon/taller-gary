@@ -3394,7 +3394,8 @@ function sublimCajasSublimadoHtml(filas){
   }).join('');
 }
 function mananaISO(){ const d=new Date(); d.setDate(d.getDate()+1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-let sublimFiltroFecha='';
+let sublimFiltroFecha=mananaISO(); // por ahora arranca filtrado en "mañana"
+let sublimMostrarSublimado=false; // la tabla de Sublimación queda oculta por ahora
 function sublimFiltrarFecha(v){ sublimFiltroFecha=v||''; render(); }
 function sublimTablaHtml(tabla, titulo){
   const entradas=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion[tabla])||[];
@@ -3456,7 +3457,7 @@ function renderSublimacion(m){
       ${sublimFiltroFecha? `<button class="btn ghost sm" onclick="sublimFiltrarFecha('')">✕ Ver todo (hoy + mañana)</button>` : `<span class="muted" style="font-size:12px">Mostrando hoy y mañana</span>`}
     </div>
     ${sublimTablaHtml('impresion','🖨️ Impresión')}
-    ${sublimTablaHtml('sublimado','🎨 Sublimación')}
+    ${sublimMostrarSublimado? sublimTablaHtml('sublimado','🎨 Sublimación') : ''}
   `;
 }
 function bindProduccion(){
