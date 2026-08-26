@@ -3307,6 +3307,9 @@ function sublimFilaHtml(tabla, e, esPrimero, esUltimo){
     <td><div class="prod-row-actions">${accionPasar}${sublimBotonesOrden(tabla,e,esPrimero,esUltimo)}<button class="prod-mini del" title="Quitar registro" onclick="sublimQuitar('${tabla}','${e.id}')">🗑</button></div></td>
   </tr>`;
 }
+/* Los metros se escriben con coma decimal ("11,2"), como es normal en Chile — Number()
+   de JS no entiende la coma (devuelve NaN) y las sumas quedaban en 0. */
+function numLocal(v){ return Number(String(v==null?'':v).trim().replace(',','.'))||0; }
 function sublimSubtotalHtml(tabla, rollo, metros){
   const colspan = tabla==='sublimado' ? 11 : 10;
   return `<tr class="sublim-subtotal"><td colspan="${colspan}">Subtotal rollo ${rollo? esc(rollo) : '(sin definir)'}: <b>${metros} mts</b></td></tr>`;
@@ -3321,7 +3324,7 @@ function sublimFilasDelDiaHtml(tabla, filas){
         html+=sublimSubtotalHtml(tabla, rolloActual, metrosAcum);
         metrosAcum=0;
       }
-      rolloActual=e.rollo; metrosAcum+=Number(e.metros)||0; huboItem=true;
+      rolloActual=e.rollo; metrosAcum+=numLocal(e.metros); huboItem=true;
     }
     html+=sublimFilaHtml(tabla, e, i===0, i===filas.length-1);
   });
@@ -3347,8 +3350,8 @@ function sublimCajasImpresionHtml(filas){
     }
   });
   return cajas.map((caja,i)=>{
-    const totalMetros=caja.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(Number(e.metros)||0),0);
-    const totalCant=caja.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(Number(e.cant)||0),0);
+    const totalMetros=caja.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(numLocal(e.metros)),0);
+    const totalCant=caja.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(numLocal(e.cant)),0);
     const quitarDivision = notaInicio[i]
       ? `<button class="btn danger sm" title="Quitar división de rollo (se junta con el anterior)" onclick="sublimQuitar('impresion','${notaInicio[i].id}')" style="margin-left:8px;width:auto;height:auto;padding:3px 9px;font-size:11px">🗑 unir con anterior</button>` : '';
     return `<div class="sublim-rollo-box">
@@ -3379,8 +3382,8 @@ function sublimCajasSublimadoHtml(filas){
   });
   return cajas.map(caja=>{
     const items=caja.filas.filter(e=>e.tipo!=='nota');
-    const totalMetros=items.reduce((s,e)=>s+(Number(e.metros)||0),0);
-    const totalCant=items.reduce((s,e)=>s+(Number(e.cant)||0),0);
+    const totalMetros=items.reduce((s,e)=>s+(numLocal(e.metros)),0);
+    const totalCant=items.reduce((s,e)=>s+(numLocal(e.cant)),0);
     return `<div class="sublim-rollo-box">
       <div class="sublim-rollo-head">🧻 Rollo ${caja.rollo? esc(caja.rollo) : '(sin definir)'} <span class="muted">· ${totalCant} unid. · ${totalMetros} mts</span></div>
       <div class="sublim-table-wrap"><table class="sublim-table">
@@ -3423,8 +3426,8 @@ function sublimTablaHtml(tabla, titulo){
       </div>
       ${fechas.length? fechas.map(f=>{
         const filas=porFecha[f].slice().sort((a,b)=>(a.orden||0)-(b.orden||0));
-        const totalCant=filas.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(Number(e.cant)||0),0);
-        const totalMetros=filas.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(Number(e.metros)||0),0);
+        const totalCant=filas.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(numLocal(e.cant)),0);
+        const totalMetros=filas.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(numLocal(e.metros)),0);
         return `
         <div class="sublim-dia">
           <div class="sublim-dia-head">${esc(fechaLegibleCorta(f))}
