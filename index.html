@@ -3357,6 +3357,33 @@ function sublimCajasImpresionHtml(filas){
     </div>`;
   }).join('');
 }
+/* Sublimación: igual que Impresión, se ve en cuadros — pero acá el cuadro lo define el
+   N° de Rollo que la persona escribe a mano (apenas cambia el número en una fila, esa
+   fila pasa a su propio cuadro "Rollo X"), no una nota. Las notas se guardan dentro del
+   cuadro donde estén paradas. */
+function sublimCajasSublimadoHtml(filas){
+  const cajas=[]; let rolloActual;
+  filas.forEach(e=>{
+    if(e.tipo!=='nota' && (!cajas.length || e.rollo!==rolloActual)){
+      cajas.push({rollo:e.rollo, filas:[]});
+      rolloActual=e.rollo;
+    }
+    if(!cajas.length) cajas.push({rollo:'', filas:[]});
+    cajas[cajas.length-1].filas.push(e);
+  });
+  return cajas.map(caja=>{
+    const items=caja.filas.filter(e=>e.tipo!=='nota');
+    const totalMetros=items.reduce((s,e)=>s+(Number(e.metros)||0),0);
+    const totalCant=items.reduce((s,e)=>s+(Number(e.cant)||0),0);
+    return `<div class="sublim-rollo-box">
+      <div class="sublim-rollo-head">🧻 Rollo ${caja.rollo? esc(caja.rollo) : '(sin definir)'} <span class="muted">· ${totalCant} unid. · ${totalMetros} mts</span></div>
+      <div class="sublim-table-wrap"><table class="sublim-table">
+        ${sublimEncabezadoTabla(true)}
+        <tbody>${caja.filas.map((e,idx)=>sublimFilaHtml('sublimado',e,idx===0,idx===caja.filas.length-1)).join('')}</tbody>
+      </table></div>
+    </div>`;
+  }).join('');
+}
 function mananaISO(){ const d=new Date(); d.setDate(d.getDate()+1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 let sublimFiltroFecha='';
 function sublimFiltrarFecha(v){ sublimFiltroFecha=v||''; render(); }
@@ -3395,11 +3422,7 @@ function sublimTablaHtml(tabla, titulo){
             <button class="btn ghost sm" style="margin-left:10px;padding:3px 9px;font-size:11.5px" onclick="sublimAgregarNota('${tabla}','${f}')">＋ Nota aquí</button>
           </div>
           ${!filas.length ? `<div class="muted" style="padding:12px 14px;font-size:12.5px">Nada todavía.</div>`
-            : tabla==='impresion' ? sublimCajasImpresionHtml(filas) : `
-          <div class="sublim-table-wrap"><table class="sublim-table">
-            ${sublimEncabezadoTabla(conRollo)}
-            <tbody>${sublimFilasDelDiaHtml(tabla, filas)}</tbody>
-          </table></div>`}
+            : tabla==='impresion' ? sublimCajasImpresionHtml(filas) : sublimCajasSublimadoHtml(filas)}
         </div>`;
       }).join('') : `<div class="muted" style="padding:14px 2px;font-size:13px">Sin registros todavía. ${tabla==='impresion'?'Usa el botón 🖨️ en Producción para traspasar.':'Traspasa desde Impresión con el botón 🎨.'}</div>`}
     </div>`;
