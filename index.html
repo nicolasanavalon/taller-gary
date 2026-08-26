@@ -569,7 +569,13 @@ function bindCards(){ document.querySelectorAll('.mod').forEach(c=>c.onclick=()=
 /* ============================ COSTOS Y COTIZACIONES ============================ */
 const $=s=>document.querySelector(s);
 function esc(s){ return (s==null?'':''+s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function todayISO(){ return new Date().toISOString().slice(0,10); }
+/* OJO: NO usar toISOString() acá — convierte a UTC, y en Chile (UTC-3/-4) eso hace que
+   pasadas las ~20-21h ya devuelva la fecha de MAÑANA en vez de hoy. Se arma la fecha con
+   los componentes LOCALES del reloj del navegador para que "hoy" sea siempre hoy. */
+function todayISO(){
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function fmtDateCL(d){ if(!d) return ''; const [y,mo,da]=d.split('-'); return `${da}/${mo}/${y}`; }
 function uid(){ return Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4); }
 
@@ -3337,7 +3343,7 @@ function sublimCajasImpresionHtml(filas){
     </div>`;
   }).join('');
 }
-function mananaISO(){ const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); }
+function mananaISO(){ const d=new Date(); d.setDate(d.getDate()+1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 let sublimFiltroFecha='';
 function sublimFiltrarFecha(v){ sublimFiltroFecha=v||''; render(); }
 function sublimTablaHtml(tabla, titulo){
