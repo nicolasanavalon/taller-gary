@@ -3281,14 +3281,14 @@ function sublimFilaHtml(tabla, e, esPrimero, esUltimo){
   return `<tr>
     <td>${e.foto? `<div class="prod-thumb-cell" onclick="sublimAbrirFoto('${tabla}','${e.id}')"><img src="${e.foto}"></div>` : `<div class="prod-thumb-cell" style="cursor:default"><span class="muted">—</span></div>`}</td>
     <td><input value="${esc(e.ot)}" oninput="sublimEditar('${tabla}','${e.id}','ot',this.value)" style="width:64px"></td>
-    <td><input value="${esc(e.cliente)}" oninput="sublimEditar('${tabla}','${e.id}','cliente',this.value)" style="width:120px"></td>
+    <td><textarea class="prod-ta" rows="2" oninput="sublimEditar('${tabla}','${e.id}','cliente',this.value)" style="width:120px">${esc(e.cliente)}</textarea></td>
     <td><textarea class="prod-ta" rows="2" oninput="sublimEditar('${tabla}','${e.id}','producto',this.value)" style="width:160px">${esc(e.producto)}</textarea></td>
     <td><input value="${esc(e.medida)}" oninput="sublimEditar('${tabla}','${e.id}','medida',this.value)" style="width:90px"></td>
     <td><input value="${esc(e.tela)}" oninput="sublimEditar('${tabla}','${e.id}','tela',this.value)" style="width:90px"></td>
     <td class="num"><input value="${esc(e.cant)}" oninput="sublimEditar('${tabla}','${e.id}','cant',this.value)" style="width:46px"></td>
     ${conRollo? `<td><input value="${esc(e.rollo)}" oninput="sublimEditar('${tabla}','${e.id}','rollo',this.value)" style="width:70px" placeholder="N°"></td>` : ''}
     <td class="num"><input value="${esc(e.metros)}" oninput="sublimEditar('${tabla}','${e.id}','metros',this.value)" style="width:60px" placeholder="mts"></td>
-    <td><input value="${esc(e.obs)}" oninput="sublimEditar('${tabla}','${e.id}','obs',this.value)" style="width:150px"></td>
+    <td><textarea class="prod-ta" rows="2" oninput="sublimEditar('${tabla}','${e.id}','obs',this.value)" style="width:150px">${esc(e.obs)}</textarea></td>
     <td><div class="prod-row-actions">${accionPasar}${sublimBotonesOrden(tabla,e,esPrimero,esUltimo)}<button class="prod-mini del" title="Quitar registro" onclick="sublimQuitar('${tabla}','${e.id}')">🗑</button></div></td>
   </tr>`;
 }
