@@ -3145,9 +3145,24 @@ function prodTraspasarASublim(uid, tabla){
 /* Flujo real del taller: primero se traspasa a Impresión (desde Producción), y de ahí,
    cuando corresponda, se traspasa a Sublimación — sin borrar el registro de Impresión
    (es historial), y arrastrando los metros ya cargados (editables igual después). */
+/* En qué "cuadro de rollo" de Impresión está una fila (mismo criterio que
+   sublimCajasImpresionHtml: se cuenta cada "🔄 Cambio de rollo" que la precede, dentro
+   del mismo día) — sirve para sugerir el N° de rollo al traspasar a Sublimación. */
+function sublimNumeroRolloImpresion(id){
+  const lista=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion.impresion)||[];
+  const item=lista.find(x=>x.id===id); if(!item) return '';
+  const delDia=lista.filter(x=>(x.fecha||'')===(item.fecha||'')).sort((a,b)=>(a.orden||0)-(b.orden||0));
+  let n=1;
+  for(const e of delDia){
+    if(e.id===id) return String(n);
+    if(e.tipo==='nota' && e.mensaje==='🔄 Cambio de rollo') n++;
+  }
+  return String(n);
+}
 function sublimPasarASublimado(idImpresion){
   const origen=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion.impresion||[]).find(x=>x.id===idImpresion);
   if(!origen) return;
+  const rolloSugerido = origen.rollo || sublimNumeroRolloImpresion(idImpresion);
   const bg=document.createElement('div'); bg.className='confirm-bg';
   bg.innerHTML=`<div class="confirm-box">
     <h3 style="margin:0 0 4px;font-family:Georgia,serif">🎨 Pasar a Sublimación</h3>
@@ -3155,7 +3170,7 @@ function sublimPasarASublimado(idImpresion){
     <div class="grid2" style="gap:10px">
       <div class="field" style="margin:0"><label>Cantidad</label><input id="psCant" type="number" value="${esc(origen.cant)}" min="0" style="width:100%"></div>
       <div class="field" style="margin:0"><label>Fecha</label><input id="psFecha" type="date" value="${todayISO()}" style="width:100%"></div>
-      <div class="field" style="margin:0"><label>N° Rollo</label><input id="psRollo" type="text" value="${esc(origen.rollo)}" style="width:100%"></div>
+      <div class="field" style="margin:0"><label>N° Rollo <span class="muted" style="font-weight:400">(del rollo de impresión)</span></label><input id="psRollo" type="text" value="${esc(rolloSugerido)}" style="width:100%"></div>
     </div>
     <div class="row" style="justify-content:flex-end;margin-top:14px;gap:8px">
       <button class="btn ghost sm" id="psCancelar">Cancelar</button>
@@ -3332,7 +3347,7 @@ function sublimCajasImpresionHtml(filas){
     const totalMetros=caja.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(Number(e.metros)||0),0);
     const totalCant=caja.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(Number(e.cant)||0),0);
     const quitarDivision = notaInicio[i]
-      ? `<button class="prod-mini del" title="Quitar división de rollo (se junta con el anterior)" onclick="sublimQuitar('impresion','${notaInicio[i].id}')" style="margin-left:8px">🗑 unir con anterior</button>` : '';
+      ? `<button class="btn danger sm" title="Quitar división de rollo (se junta con el anterior)" onclick="sublimQuitar('impresion','${notaInicio[i].id}')" style="margin-left:8px;width:auto;height:auto;padding:3px 9px;font-size:11px">🗑 unir con anterior</button>` : '';
     return `<div class="sublim-rollo-box">
       <div class="sublim-rollo-head">🧻 Rollo ${i+1} <span class="muted">· ${totalCant} unid. · ${totalMetros} mts</span>${quitarDivision}</div>
       <div class="sublim-table-wrap"><table class="sublim-table">
