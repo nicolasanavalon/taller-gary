@@ -3151,10 +3151,9 @@ function sublimPasarASublimado(idImpresion){
   const bg=document.createElement('div'); bg.className='confirm-bg';
   bg.innerHTML=`<div class="confirm-box">
     <h3 style="margin:0 0 4px;font-family:Georgia,serif">🎨 Pasar a Sublimación</h3>
-    <p class="muted" style="font-size:12.5px;margin:0 0 12px">${esc(origen.producto||'(sin producto)')} · OT ${esc(origen.ot)}</p>
+    <p class="muted" style="font-size:12.5px;margin:0 0 12px">${esc(origen.producto||'(sin producto)')} · OT ${esc(origen.ot)}${origen.metros? ` · ${esc(origen.metros)} mts (se lleva tal cual)` : ''}</p>
     <div class="grid2" style="gap:10px">
       <div class="field" style="margin:0"><label>Cantidad</label><input id="psCant" type="number" value="${esc(origen.cant)}" min="0" style="width:100%"></div>
-      <div class="field" style="margin:0"><label>Metros</label><input id="psMetros" type="number" step="0.1" value="${esc(origen.metros)}" style="width:100%"></div>
       <div class="field" style="margin:0"><label>Fecha</label><input id="psFecha" type="date" value="${todayISO()}" style="width:100%"></div>
       <div class="field" style="margin:0"><label>N° Rollo</label><input id="psRollo" type="text" value="${esc(origen.rollo)}" style="width:100%"></div>
     </div>
@@ -3172,7 +3171,7 @@ function sublimPasarASublimado(idImpresion){
       fecha: bg.querySelector('#psFecha').value || todayISO(),
       ot:origen.ot, cliente:origen.cliente, producto:origen.producto, medida:origen.medida, tela:origen.tela,
       cant: bg.querySelector('#psCant').value, foto:origen.foto||'', obs:origen.obs||'',
-      rollo: bg.querySelector('#psRollo').value, metros: bg.querySelector('#psMetros').value,
+      rollo: bg.querySelector('#psRollo').value, metros: origen.metros||'',
     };
     PRODUCCION.sublimacion.sublimado = PRODUCCION.sublimacion.sublimado || [];
     PRODUCCION.sublimacion.sublimado.push(entry);
