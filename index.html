@@ -3335,6 +3335,9 @@ function sublimEncabezadoTabla(conRollo){
    rollo" separa un cuadro del siguiente (1 cuadro = 1 rollo). "✂️ Corte" y "⬜ Blanco"
    van adentro del cuadro, como fila normal entre las banderas. */
 function sublimCajasImpresionHtml(filas){
+  // OJO: "primero"/"último" para las flechas ▲▼ se calculan sobre TODO el día, no solo
+  // dentro de su cuadro — si no, la última fila de un rollo queda con la flecha ▼
+  // apagada y no hay forma de empujarla al rollo siguiente (cruzar el marcador).
   const cajas=[[]]; const notaInicio=[null];
   filas.forEach(e=>{
     if(e.tipo==='nota' && e.mensaje==='🔄 Cambio de rollo'){
@@ -3352,7 +3355,10 @@ function sublimCajasImpresionHtml(filas){
       <div class="sublim-rollo-head">🧻 Rollo ${i+1} <span class="muted">· ${totalCant} unid. · ${totalMetros} mts</span>${quitarDivision}</div>
       <div class="sublim-table-wrap"><table class="sublim-table">
         ${sublimEncabezadoTabla(false)}
-        <tbody>${caja.length? caja.map((e,idx)=>sublimFilaHtml('impresion',e,idx===0,idx===caja.length-1)).join('') : `<tr><td colspan="10" class="muted" style="text-align:center;padding:10px">Vacío</td></tr>`}</tbody>
+        <tbody>${caja.length? caja.map(e=>{
+          const gi=filas.indexOf(e);
+          return sublimFilaHtml('impresion',e,gi===0,gi===filas.length-1);
+        }).join('') : `<tr><td colspan="10" class="muted" style="text-align:center;padding:10px">Vacío</td></tr>`}</tbody>
       </table></div>
     </div>`;
   }).join('');
@@ -3379,7 +3385,10 @@ function sublimCajasSublimadoHtml(filas){
       <div class="sublim-rollo-head">🧻 Rollo ${caja.rollo? esc(caja.rollo) : '(sin definir)'} <span class="muted">· ${totalCant} unid. · ${totalMetros} mts</span></div>
       <div class="sublim-table-wrap"><table class="sublim-table">
         ${sublimEncabezadoTabla(true)}
-        <tbody>${caja.filas.map((e,idx)=>sublimFilaHtml('sublimado',e,idx===0,idx===caja.filas.length-1)).join('')}</tbody>
+        <tbody>${caja.filas.map(e=>{
+          const gi=filas.indexOf(e);
+          return sublimFilaHtml('sublimado',e,gi===0,gi===filas.length-1);
+        }).join('')}</tbody>
       </table></div>
     </div>`;
   }).join('');
