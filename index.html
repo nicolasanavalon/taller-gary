@@ -280,8 +280,10 @@
   .prod-table th.prod-col-freeze,.prod-table td.prod-col-freeze{position:sticky;left:0;z-index:1;background:#fff;box-shadow:2px 0 5px rgba(0,0,0,.10)}
   .prod-table thead th.prod-col-freeze{z-index:3;background:#faf7ef}
   .prod-table tr.sel td.prod-col-freeze{background:var(--gold-soft)}
-  /* Modo compacto de Producción: oculta también el logo y el menú de arriba, para que quede casi solo la tabla. */
-  body.prod-hide-chrome header{display:none}
+  /* Modo compacto de Producción: oculta el logo para que quede casi solo la tabla,
+     pero deja el header (achicado) visible para que la píldora de sincronización y el reloj sigan a la vista. */
+  body.prod-hide-chrome header{padding-top:6px;padding-bottom:6px}
+  body.prod-hide-chrome .brand{display:none}
   body.prod-hide-chrome main{padding-top:10px}
   /* ---------- Sublimación: historial diario ---------- */
   .sublim-bloque{margin-bottom:26px}
@@ -3748,7 +3750,19 @@ function prodQuitarAnexo(uid, idx){
     prodAbrirAnexo(uid);
   });
 }
-function prodVerAnexo(uid, idx){
+/* Los anexos "pesados" (word/excel/pdf/imagen) ya no viajan completos en cada lectura
+   normal — el servidor los guarda aparte en Drive y solo manda una referencia
+   (driveFileId). Acá se pide el archivo real recién cuando el usuario de verdad lo abre. */
+async function prodObtenerDataUrlAnexo(a){
+  if(a.dataUrl) return a.dataUrl;
+  if(!a.driveFileId) return null;
+  const r=await fetch(PROD_SYNC_URL+'?anexoFile='+encodeURIComponent(a.driveFileId), {cache:'no-store'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const data=await r.json();
+  if(!data.ok) throw new Error(data.error||'No se pudo traer el archivo.');
+  return data.dataUrl;
+}
+async function prodVerAnexo(uid, idx){
   const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
   const a=prodAnexosDe(r.ot)[idx]; if(!a) return;
   document.querySelector('.confirm-bg')?.remove();
@@ -3768,19 +3782,31 @@ function prodVerAnexo(uid, idx){
   }
   if(a.tipo==='word' || a.tipo==='excel' || a.tipo==='archivo'){
     // Word/Excel no se pueden previsualizar dentro del navegador: se abren/descargan directo.
+    let du;
+    try{
+      if(!a.dataUrl) toast('Trayendo "'+a.nombre+'"…');
+      du = await prodObtenerDataUrlAnexo(a);
+    }catch(err){ toast('No se pudo traer el archivo: '+err.message); return; }
+    if(!du){ toast('No se pudo traer el archivo.'); return; }
     const link=document.createElement('a');
-    link.href=a.dataUrl; link.download=a.nombre||'anexo';
+    link.href=du; link.download=a.nombre||'anexo';
     document.body.appendChild(link); link.click(); link.remove();
     toast('Abriendo "'+a.nombre+'"…');
     return;
   }
+  let du;
+  try{
+    if(!a.dataUrl) toast('Trayendo "'+a.nombre+'"…');
+    du = await prodObtenerDataUrlAnexo(a);
+  }catch(err){ toast('No se pudo traer el archivo: '+err.message); return; }
+  if(!du){ toast('No se pudo traer el archivo.'); return; }
   const bg=document.createElement('div'); bg.className='prod-lightbox';
   bg.innerHTML = a.tipo==='pdf'
     ? `<div style="width:92vw;height:88vh;background:#fff;border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
-        <iframe src="${a.dataUrl}" style="flex:1;border:0;width:100%"></iframe>
+        <iframe src="${du}" style="flex:1;border:0;width:100%"></iframe>
         <div class="row" style="justify-content:center;padding:10px"><button class="btn sm" id="avCerrar">Cerrar</button></div>
       </div>`
-    : `<div style="text-align:center"><img src="${a.dataUrl}">
+    : `<div style="text-align:center"><img src="${du}">
         <div class="row" style="justify-content:center;margin-top:12px"><button class="btn sm" id="avCerrar">Cerrar</button></div></div>`;
   document.body.appendChild(bg);
   bg.querySelector('#avCerrar').onclick=()=>bg.remove();
