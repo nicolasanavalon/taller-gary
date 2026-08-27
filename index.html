@@ -45,7 +45,7 @@
   nav button:hover{color:var(--ink)}
   nav .ic{font-size:15px}
 
-  main{padding:24px 18px;max-width:1120px;margin:0 auto}
+  main{padding:24px 24px;max-width:1440px;margin:0 auto}
   main.prod-main{max-width:none;width:100%;box-sizing:border-box;padding-left:28px;padding-right:28px}
 
   /* ---------- GLASS BASE ---------- */
@@ -53,17 +53,19 @@
     border:1px solid var(--glass-strong);box-shadow:0 10px 30px rgba(90,75,25,.08),0 1px 0 rgba(255,255,255,.6) inset}
 
   /* ---------- HERO ---------- */
-  .hero{position:relative;overflow:hidden;border-radius:20px;padding:26px 24px;margin-bottom:22px;
+  .hero{position:relative;overflow:hidden;border-radius:20px;padding:16px 24px;margin-bottom:18px;
     background:linear-gradient(125deg, rgba(255,255,255,.72), rgba(202,162,74,.14));
     -webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);
     border:1px solid var(--gold-line);box-shadow:0 16px 40px rgba(120,95,20,.10)}
-  .hero-logo{position:relative;display:inline-block;margin-bottom:10px;padding:10px 6px}
+  .hero-inner{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+  .hero-logo{position:relative;display:inline-block;flex:0 0 auto;padding:6px}
   .hero-logo::before{content:'';position:absolute;inset:-10px;background:radial-gradient(ellipse at center, rgba(202,162,74,.35), transparent 70%);
     z-index:-1;filter:blur(6px)}
-  .hero-logo img{height:170px;display:block;filter:drop-shadow(0 8px 20px rgba(120,95,20,.28))}
-  @media(max-width:640px){.hero-logo img{height:120px}}
-  .hero h1{margin:0 0 6px;font-size:23px;font-family:Georgia,"Times New Roman",serif;font-weight:700;letter-spacing:.2px}
-  .hero p{margin:0;color:var(--muted);max-width:640px;font-size:14px}
+  .hero-logo img{height:88px;display:block;filter:drop-shadow(0 8px 20px rgba(120,95,20,.28))}
+  @media(max-width:640px){.hero-logo img{height:70px}}
+  .hero-text{flex:1 1 320px;min-width:0}
+  .hero h1{margin:0 0 4px;font-size:21px;font-family:Georgia,"Times New Roman",serif;font-weight:700;letter-spacing:.2px}
+  .hero p{margin:0;color:var(--muted);font-size:14px}
 
   /* ---------- MODULE CARDS ---------- */
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
@@ -558,9 +560,13 @@ function renderInicio(){
   const cards=MODULES.filter(m=>!m.hideCard);
   return `
     <div class="hero">
-      <div class="hero-logo"><img src="${LOGO_FULL}" alt="Taller Gary — 40 años de excelencia y tradición"></div>
-      <h1>Sistema de gestión del Taller Gary</h1>
-      <p>Un solo lugar para todo el flujo, desde la licitación en Mercado Público hasta el pago. Elige un módulo para entrar.</p>
+      <div class="hero-inner">
+        <div class="hero-logo"><img src="${LOGO_FULL}" alt="Taller Gary — 40 años de excelencia y tradición"></div>
+        <div class="hero-text">
+          <h1>Sistema de gestión del Taller Gary</h1>
+          <p>Un solo lugar para todo el flujo, desde la licitación en Mercado Público hasta el pago. Elige un módulo para entrar.</p>
+        </div>
+      </div>
     </div>
     <div class="grid">
       ${cards.map(m=>`
