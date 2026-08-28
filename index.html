@@ -2918,9 +2918,20 @@ function prodGuardarLocal(){
 let prodDirtyRows=new Set();  // uids de filas con cambios de campo sin mandar todavía
 let prodDirtySublim=new Set(); // "tabla|id" de registros de Sublimación con cambios sin mandar
 let prodOpsExtra=[];          // agregar fila / borrar fila / agregar o quitar anexo o registro, en orden
+/* Se incrementa cada vez que se guarda algo localmente. La lectura periódica de la nube
+   (cada 20s) puede tardar bastante si el documento pesa mucho — de sobra como para que,
+   mientras esa lectura viaja, el usuario reordene algo y ese cambio ya se haya guardado
+   ANTES de que la lectura vieja termine de llegar. Si se pisara PRODUCCION con esa
+   respuesta vieja, el reordenamiento recién guardado desaparecería de la pantalla (aunque
+   siga bien guardado en la nube) apenas se re-renderice. Comparando este contador de
+   antes/después de la lectura, cualquier edición nueva de por medio hace descartar la
+   respuesta vieja en vez de aplicarla. */
+let prodEditGen=0;
+let prodLeyendoNube=false; // true mientras hay una lectura de la nube en viaje (evita amontonar lecturas encima si el documento pesa mucho y se demora)
 function prodMarcarSucio(uid){ prodDirtyRows.add(uid); }
 function prodMarcarSucioSublim(tabla, id){ prodDirtySublim.add(tabla+'|'+id); }
 function saveProduccion(){
+  prodEditGen++;
   prodGuardarLocal();
   prodSyncEstado='guardando'; prodActualizarPildoraSync();
   clearTimeout(prodSyncTimer);
@@ -3013,6 +3024,14 @@ async function prodSincronizarAhora(silencioso){
     if(!silencioso) toast('Hay un cambio sin guardar todavía, espera un segundo…');
     return;
   }
+  // Si el documento pesa mucho, esta lectura puede demorar bastante — de sobra para que
+  // el usuario edite y ese cambio ya se haya guardado ANTES de que esta lectura vieja
+  // termine de llegar. "genAntes" marca el punto de partida: si al volver el contador
+  // cambió, alguien guardó algo nuevo mientras tanto y esta respuesta ya quedó vieja —
+  // se descarta entera en vez de pisar lo recién guardado.
+  const genAntes=prodEditGen;
+  if(prodLeyendoNube) return; // ya hay una lectura de la nube en viaje (puede demorar harto) — no amontonar otra encima
+  prodLeyendoNube=true;
   try{
     // Google Apps Script a veces responde 404 de forma intermitente (arranque en frío del
     // servicio) aunque los datos estén bien guardados — se reintenta un par de veces antes
@@ -3028,7 +3047,7 @@ async function prodSincronizarAhora(silencioso){
     }
     if(!res) throw ultimoError;
     const remoto=await res.json();
-    if(prodSyncTimer || prodEnviando) return; // mientras esperábamos la respuesta, se hizo/está en curso una edición local — no la pisemos
+    if(prodSyncTimer || prodEnviando || prodEditGen!==genAntes) return; // hubo una edición local mientras esperábamos — no la pisemos
     const n=(remoto.rows||[]).length;
     const huboNuevas=prodFusionarRemoto(remoto);
     prodSyncEstado='nube'; prodSyncDetalle=''; prodActualizarPildoraSync();
@@ -3040,6 +3059,8 @@ async function prodSincronizarAhora(silencioso){
     console.error('No se pudo leer desde la nube:', e);
     prodSyncEstado='nube-error'; prodSyncDetalle=String(e&&e.message||e); prodActualizarPildoraSync();
     if(!silencioso) toast('No se pudo conectar a la nube.','error');
+  } finally {
+    prodLeyendoNube=false;
   }
 }
 function prodFusionarRemoto(remoto){
