@@ -3287,7 +3287,7 @@ function prodTraspasarASublim(uid, tabla){
 function sublimNumeroRolloImpresion(id){
   const lista=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion.impresion)||[];
   const item=lista.find(x=>x.id===id); if(!item) return '';
-  const delDia=lista.filter(x=>(x.fecha||'')===(item.fecha||'')).sort((a,b)=>(a.orden||0)-(b.orden||0));
+  const delDia=lista.filter(x=>(x.fecha||'')===(item.fecha||'')).sort(sublimCompararOrden);
   let n=1;
   for(const e of delDia){
     if(e.id===id) return String(n);
@@ -3354,15 +3354,29 @@ function sublimQuitar(tabla, id){
 /* Orden manual dentro de un mismo día: cada registro tiene un número "orden" — subir/bajar
    solo intercambia ese número con el vecino de arriba/abajo del mismo día, sin tocar nada
    de los demás días. */
+/* Comparador de orden compartido entre el render y sublimMover — mismo criterio en los
+   tres lugares que ordenan el día para que el índice de una fila sea siempre el mismo.
+   Cuando dos registros empatan en "orden" (común: varios traspasados juntos desde
+   Producción, mismo milisegundo), Array.sort es estable y respeta el orden en que ya
+   estaban guardados — eso es justo lo que se quiere mostrar. */
+function sublimCompararOrden(a,b){ return (a.orden||0)-(b.orden||0); }
 function sublimMover(tabla, id, dir){
   const lista=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion[tabla])||[];
   const e=lista.find(x=>x.id===id); if(!e) return;
-  const delDia=lista.filter(x=>(x.fecha||'')===(e.fecha||'')).sort((a,b)=>(a.orden||0)-(b.orden||0));
+  const delDia=lista.filter(x=>(x.fecha||'')===(e.fecha||'')).sort(sublimCompararOrden);
   const idx=delDia.findIndex(x=>x.id===id);
-  const vecino=delDia[idx+dir]; if(!vecino) return;
-  const tmp=e.orden; e.orden=vecino.orden; vecino.orden=tmp;
-  prodMarcarSucioSublim(tabla, e.id);
-  prodMarcarSucioSublim(tabla, vecino.id);
+  const j=idx+dir;
+  if(j<0 || j>=delDia.length) return;
+  // OJO: antes se intercambiaba solo el campo "orden" con el vecino — pero si ambos
+  // tenían el mismo "orden" (muy común, ver comentario arriba) el intercambio era un
+  // no-op silencioso y el botón ▲▼ parecía no hacer nada. Ahora se intercambian las
+  // POSICIONES en la lista del día y se renumera todo el día de forma única y
+  // secuencial, así el movimiento siempre se nota, haya o no empates.
+  const tmp=delDia[idx]; delDia[idx]=delDia[j]; delDia[j]=tmp;
+  delDia.forEach((x,i)=>{
+    const nuevoOrden=i+1;
+    if(x.orden!==nuevoOrden){ x.orden=nuevoOrden; prodMarcarSucioSublim(tabla, x.id); }
+  });
   saveProduccion(); render();
 }
 /* Nota libre (ej. "Cambio de rollo", "Corte") — un registro especial sin datos de
@@ -3590,7 +3604,7 @@ function sublimTablaHtml(tabla, titulo){
         <button class="btn ghost sm" onclick="sublimAgregarNota('${tabla}','${todayISO()}')">＋ Nota (cambio de rollo / corte / blanco)</button>
       </div>
       ${fechas.length? fechas.map(f=>{
-        const filas=porFecha[f].slice().sort((a,b)=>(a.orden||0)-(b.orden||0));
+        const filas=porFecha[f].slice().sort(sublimCompararOrden);
         const totalCant=filas.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(numLocal(e.cant)),0);
         const totalMetros=filas.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+(numLocal(e.metros)),0);
         return `
