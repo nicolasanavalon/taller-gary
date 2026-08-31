@@ -1,25 +1,21 @@
 /*
- * Backend de sincronización para "Costos y Cotizaciones" (Taller Gary).
- * Mismo patrón que usa el módulo de Producción: un JSON con número de revisión,
- * guardado en una celda de esta misma Google Sheet, con bloqueo para que dos
- * guardados al mismo tiempo no se pisen.
+ * Backend de Taller Gary: hace DOS cosas en el mismo script.
+ * 1) Sincronización en la nube de "Costos y Cotizaciones" (como ya la tenías).
+ * 2) Puente ("proxy") hacia la API de Compra Ágil de Mercado Público, porque esa
+ *    API no permite ser llamada directo desde una página web (no tiene CORS
+ *    habilitado) — así que el navegador le pide el favor a este script, y este
+ *    script (que no tiene esa restricción) hace la consulta real y devuelve el
+ *    resultado tal cual.
  *
- * CÓMO INSTALARLO (una sola vez):
- * 1) Ve a https://sheets.google.com y crea una hoja de cálculo nueva en blanco.
- *    Ponle de nombre, por ejemplo: "Taller Gary - Costos (nube)".
- * 2) Arriba, en el menú, ve a: Extensiones > Apps Script.
- * 3) Se abre un editor con un archivo "Código.gs" con un código de ejemplo.
- *    BORRA todo ese contenido y PEGA completo este archivo en su lugar.
- * 4) Arriba a la derecha, haz clic en "Implementar" > "Nueva implementación".
- * 5) Junto a "Selecciona el tipo", haz clic en el ícono de engranaje ⚙️ y elige "Aplicación web".
- * 6) Configura:
- *      - Descripción: "Costos Gary v1" (o lo que quieras)
- *      - Ejecutar como: Yo (tu cuenta)
- *      - Quién tiene acceso: Cualquier usuario
- * 7) Haz clic en "Implementar". Te va a pedir autorizar permisos (es tu propio script,
- *    dale "Avanzado" > "Ir a [nombre del proyecto] (no seguro)" si Google muestra esa advertencia
- *    — es normal para scripts propios que no están publicados en la tienda de Google).
- * 8) Al terminar, te da un link que termina en "/exec". Copia ese link completo y pásamelo.
+ * CÓMO ACTUALIZAR TU SCRIPT EXISTENTE (mismo link, no se pierde nada):
+ * 1) Abre tu Google Sheet de "Taller Gary - Costos (nube)".
+ * 2) Extensiones > Apps Script.
+ * 3) Selecciona TODO el código actual y bórralo. Pega completo este archivo en su lugar.
+ * 4) Arriba a la derecha: Implementar > Administrar implementaciones.
+ * 5) Haz clic en el ícono de lápiz (✏️) de la implementación activa.
+ * 6) En "Versión", elige "Nueva versión" (NO crees una implementación nueva —
+ *    así el link que ya usa la web sigue siendo el mismo, no hay que cambiar nada más).
+ * 7) Haz clic en "Implementar". Listo — mismo link de siempre, con el código nuevo.
  */
 
 const CELDA_DATA = 'A1';
@@ -30,6 +26,11 @@ function hoja_() {
 }
 
 function doGet(e) {
+  const accion = (e.parameter && e.parameter.action) || '';
+  if (accion === 'compra_agil_lista') return proxyCompraAgilLista_(e);
+  if (accion === 'compra_agil_detalle') return proxyCompraAgilDetalle_(e);
+
+  // Comportamiento original: leer los datos de Costos y Cotizaciones guardados.
   const sh = hoja_();
   const raw = sh.getRange(CELDA_DATA).getValue();
   const rev = Number(sh.getRange(CELDA_REV).getValue() || 0);
@@ -69,5 +70,45 @@ function doPost(e) {
       .setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
+  }
+}
+
+/* ---------- Puente hacia la API de Compra Ágil (api2.mercadopublico.cl) ---------- */
+const COMPRA_AGIL_BASE = 'https://api2.mercadopublico.cl/v2/compra-agil';
+const PARAMS_LISTA_PERMITIDOS = ['q','region','estado','publicado_desde','publicado_hasta',
+  'cambio_desde','cambio_hasta','ttl_cambio_ms','tamano_pagina','numero_pagina','ordenar_por'];
+
+function proxyCompraAgilLista_(e) {
+  const ticket = e.parameter.ticket || '';
+  const partes = [];
+  PARAMS_LISTA_PERMITIDOS.forEach(function(k){
+    if (e.parameter[k] !== undefined && e.parameter[k] !== '') {
+      partes.push(k + '=' + encodeURIComponent(e.parameter[k]));
+    }
+  });
+  const url = COMPRA_AGIL_BASE + (partes.length ? '?' + partes.join('&') : '');
+  return llamarCompraAgil_(url, ticket);
+}
+
+function proxyCompraAgilDetalle_(e) {
+  const ticket = e.parameter.ticket || '';
+  const codigo = e.parameter.codigo || '';
+  const url = COMPRA_AGIL_BASE + '/' + encodeURIComponent(codigo);
+  return llamarCompraAgil_(url, ticket);
+}
+
+function llamarCompraAgil_(url, ticket) {
+  try {
+    const resp = UrlFetchApp.fetch(url, {
+      headers: { ticket: ticket },
+      muteHttpExceptions: true,
+    });
+    return ContentService.createTextOutput(resp.getContentText())
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: 'NOK', payload: null,
+      errors: [{ codigo: '500', mensaje: 'Error del proxy: ' + err.message, detalle: null }],
+    })).setMimeType(ContentService.MimeType.JSON);
   }
 }
