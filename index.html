@@ -1036,6 +1036,23 @@ function bindCostosForm(){
   const e6=$('#cfTelefono'); if(e6) e6.addEventListener('input',()=>autoTelefono(e6));
   const e7=$('#cfTelefono2'); if(e7) e7.addEventListener('input',()=>autoTelefono(e7));
   const e8=$('#cfComuna'); if(e8) e8.addEventListener('input',()=>autoCap(e8,'title'));
+  bindDraftClienteInputs();
+}
+/* Mantiene "draftCliente" al día con lo que se va escribiendo en el formulario de "nueva
+   cotización", campo por campo. Sin esto, un redibujo en segundo plano (la sincronización
+   con la nube cada 20s) reconstruye el formulario con los valores VIEJOS de draftCliente
+   (vacíos, si recién se estaba empezando a llenar) y borra lo que el usuario llevaba
+   tipeado — que es justo el bug que se está arreglando acá. */
+function bindDraftClienteInputs(){
+  const campos=['cfId','cfFecha','cfEmpresa','cfRut','cfContacto','cfMail','cfTelefono','cfTelefono2','cfDireccion','cfComuna'];
+  const propiedad={ cfId:'id', cfFecha:'fecha', cfEmpresa:'empresa', cfRut:'rut', cfContacto:'contacto',
+    cfMail:'mail', cfTelefono:'telefono', cfTelefono2:'telefono2', cfDireccion:'direccion', cfComuna:'comuna' };
+  campos.forEach(id=>{
+    const el=$('#'+id); if(!el) return;
+    el.addEventListener('input',()=>{ if(!draftCliente) return; draftCliente[propiedad[id]]=el.value; draftClienteSucio=true; });
+  });
+  const region=$('#cfRegion');
+  if(region) region.addEventListener('change',()=>{ if(!draftCliente) return; draftCliente.region=region.value; draftClienteSucio=true; });
 }
 function autoLower(el){
   const pos=el.selectionStart, val=el.value, out=val.toLowerCase();
@@ -1174,12 +1191,19 @@ async function costosSincronizarAhora(silencioso){
     if(!silencioso) toast('Tienes una cotización abierta con cambios sin guardar — sincroniza después de guardar.');
     return;
   }
+  if(costosFormularioSucio()){
+    // Mismo caso, pero para el formulario de "nueva cotización": si se redibuja mientras
+    // se está escribiendo ahí, se pierde lo tipeado. Se sincroniza solo al guardar/cancelar.
+    if(!silencioso) toast('Tienes datos sin guardar en el formulario de nueva cotización — sincroniza después de guardar.');
+    return;
+  }
   try{
     const res=await fetch(COSTOS_SYNC_URL, {cache:'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const remoto=await res.json();
     if(costosSyncTimer || costosEnviando) return;
     if(current==='costos' && costosView==='detalle' && cotizacionSucia) return; // volvió a quedar sucia mientras esperábamos la respuesta
+    if(costosFormularioSucio()) return; // empezó a escribir el formulario mientras esperábamos la respuesta
     const necesitaSubir=costosFusionarRemoto(remoto);
     costosSyncEstado='nube'; costosSyncDetalle=''; costosActualizarPildoraSync();
     render();
@@ -1238,13 +1262,21 @@ function confirmDialog(msg, onOk, labelOk){
 /* ---------- Aviso de cambios sin guardar al salir de una cotización ---------- */
 let cotizacionSucia=false;
 function marcarSucia(){ cotizacionSucia=true; }
+/* Mismo mecanismo que "cotizacionSucia", pero para el formulario de "Datos del cliente —
+   nueva cotización": mientras se está escribiendo ahí, un refresco automático en segundo
+   plano (la sincronización con la nube, cada 20s) no debe redibujar la página y borrar lo
+   que se llevaba tipeado. */
+let draftClienteSucio=false;
+function costosFormularioSucio(){
+  return current==='costos' && costosView==='lista' && draftClienteSucio;
+}
 function advertirSalidaSiSucia(cb){
   if(current==='costos' && costosView==='detalle' && cotizacionSucia){
     confirmDialog('Tienes cambios sin guardar en esta cotización. ¿Quieres salir sin guardarlos?', ()=>{ cotizacionSucia=false; cb(); }, 'Salir sin guardar');
   } else cb();
 }
 window.addEventListener('beforeunload', e=>{
-  if(current==='costos' && costosView==='detalle' && cotizacionSucia){ e.preventDefault(); e.returnValue=''; }
+  if((current==='costos' && costosView==='detalle' && cotizacionSucia) || costosFormularioSucio()){ e.preventDefault(); e.returnValue=''; }
 });
 function backupCostos(){
   const blob=new Blob([JSON.stringify(COSTOS,null,2)],{type:'application/json'});
@@ -1283,8 +1315,9 @@ function cerrarDetalleCotizacion(){
   advertirSalidaSiSucia(()=>{ costosView='lista'; detalleCotId=null; render(); window.scrollTo(0,0); });
 }
 function nuevoDraftCliente(){
-  draftCliente = { id:'', fecha:todayISO(), estado:'Pendiente', empresa:'', rut:'', contacto:'', mail:'', telefono:'', telefono2:'', direccion:'', comuna:'', region:'', codigoMP:'' };
+  draftCliente = { id:'', fecha:todayISO(), estado:'Pendiente', empresa:'', rut:'', contacto:'', mail:'', telefono:'', telefono2:'', direccion:'', comuna:'', region:'' };
   draftEditOrig = null;
+  draftClienteSucio = false;
 }
 
 const ESTADOS_COT = ['Pendiente','Aceptada','Rechazada'];
@@ -1294,10 +1327,10 @@ function estadoBadge(estado){
 }
 function tablaCotizaciones(rows, vacio){
   if(!rows.length) return `<div class="muted">${vacio}</div>`;
-  return `<div style="overflow-x:auto"><table style="min-width:980px"><thead><tr><th>ID</th><th>Cód. MP/Licitación</th><th>Fecha</th><th>Cliente/Empresa</th><th>RUT</th><th>Contacto</th>
+  return `<div style="overflow-x:auto"><table style="min-width:900px"><thead><tr><th>ID</th><th>Fecha</th><th>Cliente/Empresa</th><th>RUT</th><th>Contacto</th>
     <th>Teléfono</th><th>Mail</th><th class="num">Total</th><th>Estado</th><th></th></tr></thead><tbody>
     ${rows.map(c=>`<tr style="cursor:pointer" onclick="abrirDetalleCotizacion('${c.id}')" title="Click para trabajar la cotización">
-      <td><b>${esc(c.id)}</b></td><td class="muted">${c.codigoMP?esc(c.codigoMP):'—'}</td><td>${fmtDateCL(c.fecha)}</td><td>${esc(c.empresa)}</td><td class="muted">${esc(c.rut)}</td>
+      <td><b>${esc(c.id)}</b></td><td>${fmtDateCL(c.fecha)}</td><td>${esc(c.empresa)}</td><td class="muted">${esc(c.rut)}</td>
       <td class="muted">${esc(c.contacto)}</td><td class="muted">${esc(c.telefono)}${c.telefono2?' / '+esc(c.telefono2):''}</td><td class="muted">${esc(c.mail)}</td>
       <td class="num">${c.total?money(c.total):'<span class="muted">—</span>'}</td>
       <td>${estadoBadge(c.estado||'Pendiente')}</td>
@@ -1347,8 +1380,6 @@ function renderCostos(m){
         <div class="field"><label>ID cotización</label><input id="cfId" value="${esc(draftCliente.id)}" placeholder="Ej: COT-2026-001"></div>
         <div class="field"><label>Fecha</label><input type="date" id="cfFecha" value="${draftCliente.fecha}"></div>
       </div>
-      <div class="field"><label>Código Mercado Público / Licitación <span class="muted" style="font-weight:400">(opcional, para ligar esta cotización con la publicación)</span></label>
-        <input id="cfCodigoMP" value="${esc(draftCliente.codigoMP||'')}" placeholder="Ej: 1234-56-LE26"></div>
       ${editando?`<div class="row" style="margin-bottom:10px">Estado actual: ${estadoBadge(draftCliente.estado||'Pendiente')} <span class="muted" style="font-size:12px">(se cambia con los botones de la tabla, no aquí)</span></div>`:''}
       <div class="grid2">
         <div class="field"><label>Nombre Cliente/Empresa</label><input id="cfEmpresa" value="${esc(draftCliente.empresa)}" placeholder="Institución / empresa"></div>
@@ -1731,7 +1762,7 @@ function renderDetalleCotizacion(c){
       <div class="page-head">
         <div class="icon">🧮</div>
         <div style="flex:1"><h1>Cotización ${esc(c.id)} ${estadoBadge(c.estado||'Pendiente')}</h1>
-          <div class="sub">${esc(c.empresa)}${c.rut?' · RUT '+esc(c.rut):''}${c.contacto?' · '+esc(c.contacto):''}${c.codigoMP?' · Cód. '+esc(c.codigoMP):''}</div>
+          <div class="sub">${esc(c.empresa)}${c.rut?' · RUT '+esc(c.rut):''}${c.contacto?' · '+esc(c.contacto):''}</div>
         </div>
         <button class="btn" onclick="guardarItemsCotizacion()">💾 Guardar cambios</button>
       </div>
@@ -2156,7 +2187,6 @@ function guardarCotizacionCliente(){
     direccion:toTitleCase($('#cfDireccion').value.trim()),
     comuna:toTitleCase($('#cfComuna').value.trim()),
     region:$('#cfRegion').value||'',
-    codigoMP:$('#cfCodigoMP').value.trim(),
     items:draftCliente.items||[],
     total:draftCliente.total||0,
   };
@@ -2172,7 +2202,7 @@ function guardarCotizacionCliente(){
 }
 function editarCotizacionCliente(id){
   const c=COSTOS.cotizaciones.find(x=>x.id===id); if(!c) return;
-  draftCliente={...c}; draftEditOrig=id; render(); window.scrollTo(0,0);
+  draftCliente={...c}; draftEditOrig=id; draftClienteSucio=false; render(); window.scrollTo(0,0);
 }
 function eliminarCotizacionCliente(id){
   confirmDialog('¿Eliminar la cotización '+id+'?', ()=>{
@@ -2673,21 +2703,9 @@ async function verFichaLicitacion(codigo){
 function pasarACotizacion(codigo, organismo){
   nuevoDraftCliente();
   draftCliente.empresa=toSentenceCase(organismo||'');
-  draftCliente.codigoMP=codigo||'';
   go('costos');
   toast('Datos del organismo precargados en una nueva cotización.');
 }
-/* Cotizaciones (de Costos y Cotizaciones) que tienen un código de Mercado Público/licitación
-   asociado — una fila por código, la más reciente si hay más de una cotización con el mismo. */
-function licitacionesCotizadas(){
-  const vistos={};
-  (COSTOS.cotizaciones||[]).forEach(c=>{
-    const cod=(c.codigoMP||'').trim(); if(!cod) return;
-    if(!vistos[cod] || c.fecha>vistos[cod].fecha) vistos[cod]=c;
-  });
-  return Object.values(vistos).sort((a,b)=>b.fecha.localeCompare(a.fecha));
-}
-function irACotizacionDesdeMercado(id){ go('costos'); abrirDetalleCotizacion(id); }
 function mercadoTextoUltimaActualizacion(){
   if(!MERCADO.ultimaBusquedaISO) return 'Aún no se ha actualizado.';
   const d=new Date(MERCADO.ultimaBusquedaISO);
