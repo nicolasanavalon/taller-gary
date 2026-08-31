@@ -2216,7 +2216,17 @@ function normalizarRut(r){ return (r||'').replace(/[.\s]/g,'').toUpperCase(); }
 let mercadoCompraAgilBuscando=false;
 async function compraAgilProxyGet(params){
   const qs=Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
-  const r=await fetch(COSTOS_SYNC_URL+'?'+qs, {cache:'no-store'});
+  // Si Google (Apps Script) se queda pegado por demasiadas llamadas seguidas, esto evita
+  // que la página quede esperando para siempre "Revisando…" sin nunca terminar.
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(), 15000);
+  let r;
+  try{
+    r=await fetch(COSTOS_SYNC_URL+'?'+qs, {cache:'no-store', signal:controller.signal});
+  }catch(e){
+    if(e.name==='AbortError') throw new Error('Se agotó el tiempo de espera consultando Compra Ágil (Google está lento o saturado). Intenta de nuevo en un momento.');
+    throw e;
+  }finally{ clearTimeout(timer); }
   if(!r.ok) throw new Error('HTTP '+r.status);
   const texto=await r.text();
   try{ return JSON.parse(texto); }
@@ -2330,6 +2340,20 @@ mercadoAutoRefrescarCompraAgil();
    cada una para ver el RUT), acá basta con la lista: la API permite pedir directo
    estado=publicada, así que no hace falta revisar el detalle de cada resultado. */
 let mercadoOportunidadesBuscando=false;
+/* La búsqueda por palabra clave de la API de Compra Ágil es "difusa": a veces trae
+   resultados que no tienen nada que ver, porque la palabra aparece como parte de OTRA
+   palabra en algún texto interno (ej. "asta" adentro de "hasta"). Para las oportunidades
+   (que se muestran tal cual, sin el filtro extra del RUT) conviene exigir que la palabra
+   aparezca completa en el nombre del proceso, no como pedazo de otra palabra. */
+function coincidePalabraEnNombre(nombre, palabras){
+  const norm=normalizarNombre(nombre||'');
+  return palabras.some(p=>{
+    const pn=normalizarNombre(p); if(!pn) return false;
+    const escapada=pn.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const re=new RegExp('(^|[^a-z0-9])'+escapada+'([^a-z0-9]|$)');
+    return re.test(norm);
+  });
+}
 function extraerOportunidad(item){
   return {
     codigo: item.codigo,
@@ -2355,7 +2379,9 @@ async function refrescarOportunidadesCompraAgil(silencioso){
       try{
         const data=await compraAgilProxyGet({action:'compra_agil_lista', ticket:MERCADO.ticket, q:palabra, estado:'publicada', tamano_pagina:50, ordenar_por:'FechaPublicacion'});
         if(data.success!=='OK') throw new Error((data.errors&&data.errors[0]&&data.errors[0].mensaje)||'Error desconocido buscando "'+palabra+'"');
-        ((data.payload&&data.payload.items)||[]).forEach(it=>{ candidatos[it.codigo]=extraerOportunidad(it); });
+        ((data.payload&&data.payload.items)||[]).forEach(it=>{
+          if(coincidePalabraEnNombre(it.nombre, palabras)) candidatos[it.codigo]=extraerOportunidad(it);
+        });
       }catch(e){ console.error('Oportunidades Compra Ágil, error buscando "'+palabra+'":', e); huboError=e; }
     });
     MERCADO.oportunidades=Object.values(candidatos);
