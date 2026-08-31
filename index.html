@@ -616,6 +616,11 @@ function todayISO(){
 }
 function fmtDateCL(d){ if(!d) return ''; const [y,mo,da]=d.split('-'); return `${da}/${mo}/${y}`; }
 function uid(){ return Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4); }
+/* Misma lógica de "hoy local" que todayISO(), pero restando N días. */
+function fechaHaceNDias(n){
+  const d=new Date(); d.setDate(d.getDate()-n);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 
 /* ---------- Galería de fotos de banderas (biblioteca reutilizable) ---------- */
 const KEY_FOTOS='taller_gary_fotos_v1';
@@ -2175,7 +2180,7 @@ function eliminarCotizacionCliente(id){
 const KEY_MERCADO='taller_gary_mercado_v1';
 function loadMercado(){
   try{ const raw=localStorage.getItem(KEY_MERCADO); if(raw) return JSON.parse(raw); }catch(e){ console.error(e); }
-  return { ticket:'', palabras:'bandera, banderas, pabellón, estandarte, gallardete, insignia, sublimación, corbatín',
+  return { ticket:'', palabras:'bandera, asta, mástil, gallardete, pabellón nacional, estandarte',
     decisiones:{} /* codigo -> 'interes' | 'descartada' */ };
 }
 function saveMercado(){ localStorage.setItem(KEY_MERCADO, JSON.stringify(MERCADO)); }
@@ -2262,7 +2267,9 @@ async function refrescarCompraAgil(silencioso){
       if(nuestra){
         nuevos++;
         const entry={ codigo, nombre:detalle.nombre, organismo:detalle.institucion&&detalle.institucion.organismo_comprador,
-          monto:nuestra.monto_total, estado:estadoOfertaCompraAgil(detalle,nuestra), fechaCierre:detalle.fechas&&detalle.fechas.fecha_cierre };
+          monto:nuestra.monto_total, estado:estadoOfertaCompraAgil(detalle,nuestra),
+          fechaCierre:detalle.fechas&&detalle.fechas.fecha_cierre,
+          fechaPublicacion:detalle.fechas&&detalle.fechas.fecha_publicacion };
         if(idx>=0) MERCADO.compraAgil[idx]=entry; else MERCADO.compraAgil.push(entry);
       } else if(idx>=0){
         MERCADO.compraAgil.splice(idx,1); // ya no aparecemos cotizando (raro, pero por si acaso)
@@ -2292,6 +2299,128 @@ function mercadoAutoRefrescarCompraAgil(){
 let compraAgilAutoPoll=null;
 if(!compraAgilAutoPoll) compraAgilAutoPoll=setInterval(mercadoAutoRefrescarCompraAgil, 30*60*1000);
 mercadoAutoRefrescarCompraAgil();
+
+/* ---------- Compra Ágil: oportunidades vigentes (todo lo publicado y abierto ahora) ---------- */
+/* A diferencia de la detección de "en cuáles cotizamos" (que necesita revisar el detalle de
+   cada una para ver el RUT), acá basta con la lista: la API permite pedir directo
+   estado=publicada, así que no hace falta revisar el detalle de cada resultado. */
+let mercadoOportunidadesBuscando=false;
+function extraerOportunidad(item){
+  return {
+    codigo: item.codigo,
+    nombre: item.nombre||'',
+    organismo: item.institucion&&item.institucion.organismo_comprador||'',
+    region: item.institucion&&item.institucion.nombre_region||'',
+    fechaPublicacion: item.fechas&&item.fechas.fecha_publicacion||'',
+    fechaCierre: item.fechas&&item.fechas.fecha_cierre||'',
+    monto: item.montos&&(item.montos.monto_disponible_clp||item.montos.monto_disponible)||0,
+  };
+}
+async function refrescarOportunidadesCompraAgil(silencioso){
+  if(!MERCADO.ticket){ if(!silencioso) toast('Primero guarda tu ticket.','error'); return; }
+  if(mercadoOportunidadesBuscando) return;
+  mercadoOportunidadesBuscando=true; if(current==='mercado') render();
+  let huboError=null;
+  try{
+    const palabras=(MERCADO.palabras||'').split(',').map(p=>p.trim()).filter(Boolean);
+    const candidatos={};
+    await Promise.all(palabras.map(async palabra=>{
+      try{
+        const data=await compraAgilProxyGet({action:'compra_agil_lista', ticket:MERCADO.ticket, q:palabra, estado:'publicada', tamano_pagina:50, ordenar_por:'FechaPublicacion'});
+        if(data.success!=='OK') throw new Error((data.errors&&data.errors[0]&&data.errors[0].mensaje)||'Error desconocido buscando "'+palabra+'"');
+        ((data.payload&&data.payload.items)||[]).forEach(it=>{ candidatos[it.codigo]=extraerOportunidad(it); });
+      }catch(e){ console.error('Oportunidades Compra Ágil, error buscando "'+palabra+'":', e); huboError=e; }
+    }));
+    MERCADO.oportunidades=Object.values(candidatos);
+    MERCADO.ultimaBusquedaOportunidadesISO=new Date().toISOString();
+    saveMercado();
+    if(!silencioso){
+      if(huboError) toast('Se buscó con errores en alguna palabra clave: '+huboError.message,'error');
+      else toast(`${MERCADO.oportunidades.length} oportunidades vigentes encontradas.`);
+    }
+  }catch(e){
+    console.error('Error general buscando oportunidades:', e);
+    if(!silencioso) toast('Error: '+e.message,'error');
+  }
+  mercadoOportunidadesBuscando=false; if(current==='mercado') render();
+}
+function oportunidadesDebeRefrescar(){
+  if(!MERCADO.ticket || mercadoOportunidadesBuscando) return false;
+  if(!MERCADO.ultimaBusquedaOportunidadesISO) return true;
+  const horas=(Date.now()-new Date(MERCADO.ultimaBusquedaOportunidadesISO).getTime())/3600000;
+  return horas>=3;
+}
+function mercadoAutoRefrescarOportunidades(){
+  if(oportunidadesDebeRefrescar()) refrescarOportunidadesCompraAgil(true);
+}
+let oportunidadesAutoPoll=null;
+if(!oportunidadesAutoPoll) oportunidadesAutoPoll=setInterval(mercadoAutoRefrescarOportunidades, 30*60*1000);
+mercadoAutoRefrescarOportunidades();
+
+/* Ficha de un proceso de Compra Ágil (oportunidad vigente o donde ya postulamos): se pide
+   el detalle completo a la API (vía el proxy) y se muestra en un modal, igual que la ficha
+   de licitaciones clásicas. */
+async function verFichaCompraAgil(codigo){
+  if(!MERCADO.ticket){ toast('Falta el ticket.','error'); return; }
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box wide"><div class="row between"><h2 style="margin:0">Ficha Compra Ágil</h2>
+    <button class="btn ghost sm" id="fichaCaClose" type="button">Cerrar</button></div>
+    <div id="fichaCaBody" class="muted" style="padding:20px 0">Cargando…</div></div>`;
+  document.body.appendChild(bg);
+  bg.querySelector('#fichaCaClose').onclick=()=>bg.remove();
+  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
+  try{
+    const detalle=await chequearDetalleCompraAgil(codigo);
+    if(!detalle) throw new Error('No se pudo obtener el detalle.');
+    const rutNorm=normalizarRut(RUT_TALLER);
+    const proveedores=detalle.proveedores_cotizando||[];
+    const nuestra=proveedores.find(p=>normalizarRut(p.rut_proveedor)===rutNorm);
+    const docs=detalle.documentos||[];
+    bg.querySelector('#fichaCaBody').innerHTML=`
+      <h3 style="margin:0 0 4px">${esc(detalle.nombre||codigo)}</h3>
+      <div class="muted" style="margin-bottom:12px">${esc(codigo)} · ${esc((detalle.institucion&&detalle.institucion.organismo_comprador)||'')}</div>
+      <div class="cs-row"><span>Unidad de compra</span><b style="text-align:right;max-width:60%">${esc((detalle.institucion&&detalle.institucion.unidad_compra)||'—')}</b></div>
+      <div class="cs-row"><span>Región</span><b>${esc((detalle.institucion&&detalle.institucion.nombre_region)||'—')}</b></div>
+      <div class="cs-row"><span>Fecha publicación</span><b>${esc((detalle.fechas&&detalle.fechas.fecha_publicacion)||'—')}</b></div>
+      <div class="cs-row"><span>Fecha cierre</span><b>${esc((detalle.fechas&&detalle.fechas.fecha_cierre)||'—')}</b></div>
+      <div class="cs-row"><span>Monto disponible</span><b>${(detalle.montos&&(detalle.montos.monto_disponible_clp||detalle.montos.monto_disponible))?money(detalle.montos.monto_disponible_clp||detalle.montos.monto_disponible):'—'}</b></div>
+      <div class="cs-row"><span>Estado del proceso</span><b>${esc((detalle.estado&&detalle.estado.glosa)||'—')}</b></div>
+      ${nuestra?`<div class="cs-row"><span>Nuestra oferta</span><b>${nuestra.monto_total?money(nuestra.monto_total):'—'} · ${esc((nuestra.estado_cotizacion&&nuestra.estado_cotizacion.glosa)||'')}</b></div>`:''}
+      ${docs.length?`<h3 style="margin:16px 0 6px">Documentos adjuntos</h3>
+        <div class="muted">${docs.map(d=>esc(d.nombre)).join('<br>')}</div>`:''}`;
+  }catch(e){
+    bg.querySelector('#fichaCaBody').innerHTML=`<span style="color:var(--bad)">No se pudo cargar la ficha: ${esc(e.message)}</span>`;
+  }
+}
+
+/* ---------- "Todo lo que hemos postulado", con filtro por rango de fechas ---------- */
+function rangoPostuladoDesde(){ return MERCADO.filtroDesde||fechaHaceNDias(7); }
+function rangoPostuladoHasta(){ return MERCADO.filtroHasta||todayISO(); }
+function guardarFiltroPostulado(){
+  MERCADO.filtroDesde=$('#mkPostDesde').value||''; MERCADO.filtroHasta=$('#mkPostHasta').value||'';
+  saveMercado(); render();
+}
+function reiniciarFiltroPostulado(){
+  MERCADO.filtroDesde=fechaHaceNDias(7); MERCADO.filtroHasta=todayISO(); saveMercado(); render();
+}
+/* Junta las dos fuentes de "postulamos acá": las Compra Ágil detectadas por RUT, y las
+   cotizaciones de Costos con un código de licitación/MP asociado. */
+function listaPostulado(){
+  const desde=rangoPostuladoDesde(), hasta=rangoPostuladoHasta();
+  const enRango=f=>{ const d=(f||'').slice(0,10); return d && d>=desde && d<=hasta; };
+  const bids=(MERCADO.compraAgil||[]).filter(c=>enRango(c.fechaPublicacion)).map(c=>({
+    tipo:'compra_agil', fecha:(c.fechaPublicacion||'').slice(0,10), codigo:c.codigo,
+    nombre:c.nombre, organismo:c.organismo, monto:c.monto, estado:c.estado }));
+  const cotiz=licitacionesCotizadas().filter(c=>enRango(c.fecha)).map(c=>({
+    tipo:'cotizacion', fecha:(c.fecha||'').slice(0,10), codigo:c.codigoMP, id:c.id,
+    nombre:c.empresa, organismo:c.empresa, monto:c.total, estado:c.estado||'Pendiente' }));
+  return bids.concat(cotiz).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+}
+function irADetallePostulado(tipo, codigoOId){
+  if(tipo==='compra_agil') verFichaCompraAgil(codigoOId);
+  else irACotizacionDesdeMercado(codigoOId);
+}
+
 function estadoOfertaBadge(estado){
   const map={ pendiente:['b-pend','⏳ Pendiente de cierre'], adjudicada:['b-acept','✔ Adjudicada'],
     no_adjudicada:['b-rech','✕ No adjudicada'], desierta:['b-rech','— Desierta'], cancelada:['b-rech','⊘ Cancelada'] };
@@ -2437,6 +2566,8 @@ function mercadoTextoUltimaActualizacion(){
 function bindMercadoForm(){
   const t=$('#mkTicket'); if(t) t.addEventListener('keydown', e=>{ if(e.key==='Enter') guardarTicketMercado(); });
   const p=$('#mkPalabras'); if(p) p.addEventListener('change', guardarPalabrasMercado);
+  const d1=$('#mkPostDesde'); if(d1) d1.addEventListener('change', guardarFiltroPostulado);
+  const d2=$('#mkPostHasta'); if(d2) d2.addEventListener('change', guardarFiltroPostulado);
 }
 function renderMercado(m){
   if(!MERCADO.ticket){
@@ -2469,40 +2600,50 @@ function renderMercado(m){
         <button class="btn" style="align-self:flex-end" onclick="buscarLicitaciones()" ${mercadoBuscando?'disabled':''}>${mercadoBuscando?'Buscando…':'🔍 Buscar'}</button>
         <button class="btn ghost sm" style="align-self:flex-end" onclick="buscarLicitacionesFecha(todayISO(),false)" ${mercadoBuscando?'disabled':''} title="Vuelve a traer las de hoy">🔄 Actualizar hoy</button>
       </div>
-      <div class="field" style="margin-top:12px"><label>Palabras clave (separadas por coma) — filtra los resultados de la fecha buscada</label>
+      <div class="field" style="margin-top:12px"><label>Palabras clave (separadas por coma) — se usan para filtrar aquí abajo y para buscar oportunidades y postulaciones en Compra Ágil</label>
         <input id="mkPalabras" value="${esc(MERCADO.palabras)}"></div>
       <div class="muted" style="font-size:12px">${mercadoTextoUltimaActualizacion()} — se refresca sola cada 4 horas mientras el ticket esté guardado.</div>
     </div>
 
     <div class="panel">
-      <h2>IDs donde ya cotizamos (${licitacionesCotizadas().length})</h2>
-      <div class="muted" style="margin-bottom:10px">Cotizaciones de "Costos y Cotizaciones" con un código de Mercado Público / licitación asociado.</div>
-      ${(()=>{ const lista=licitacionesCotizadas();
-        if(!lista.length) return `<div class="muted">Todavía no tienes cotizaciones con un código asociado. Se agrega solo al usar "→ Cotizar" desde una licitación de la lista de abajo, o puedes escribirlo a mano en la cotización.</div>`;
-        return `<div style="overflow-x:auto"><table style="min-width:700px"><thead><tr><th>Código MP/Licitación</th><th>Cotización</th><th>Cliente/Empresa</th><th class="num">Total</th><th>Estado</th></tr></thead><tbody>
-        ${lista.map(c=>`<tr style="cursor:pointer" onclick="irACotizacionDesdeMercado('${esc(c.id)}')" title="Ver esta cotización">
-          <td><b>${esc(c.codigoMP)}</b></td><td class="muted">${esc(c.id)}</td><td>${esc(c.empresa)}</td>
-          <td class="num">${c.total?money(c.total):'<span class="muted">—</span>'}</td>
-          <td>${estadoBadge(c.estado||'Pendiente')}</td>
+      <div class="row between">
+        <h2 style="margin:0">Oportunidades de postulación vigentes (${(MERCADO.oportunidades||[]).length})</h2>
+        <button class="btn ghost sm" onclick="refrescarOportunidadesCompraAgil(false)" ${mercadoOportunidadesBuscando?'disabled':''}>${mercadoOportunidadesBuscando?'Buscando…':'🔍 Buscar ahora'}</button>
+      </div>
+      <div class="muted" style="margin-bottom:6px">Todo lo publicado en Compra Ágil que sigue abierto ahora mismo, para tus palabras clave de arriba. Haz clic en una fila para ver el detalle.</div>
+      <div class="muted" style="font-size:12px;margin-bottom:10px">${MERCADO.ultimaBusquedaOportunidadesISO? 'Última búsqueda: '+new Date(MERCADO.ultimaBusquedaOportunidadesISO).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : 'Aún no se ha buscado.'} — se busca sola cada 3 horas.</div>
+      ${(()=>{ const lista=(MERCADO.oportunidades||[]).slice().sort((a,b)=>(a.fechaCierre||'')<(b.fechaCierre||'')?-1:1);
+        if(!lista.length) return `<div class="muted">No hay oportunidades vigentes detectadas todavía. Prueba "🔍 Buscar ahora", o revisa que las palabras clave de arriba estén guardadas.</div>`;
+        return `<div style="overflow-x:auto"><table style="min-width:800px"><thead><tr><th>Código</th><th>Nombre</th><th>Organismo</th><th class="num">Monto disponible</th><th>Cierre</th></tr></thead><tbody>
+        ${lista.map(o=>`<tr style="cursor:pointer" onclick="verFichaCompraAgil('${esc(o.codigo)}')" title="Ver ficha">
+          <td class="muted">${esc(o.codigo)}</td><td><b>${esc(o.nombre||'')}</b></td><td class="muted">${esc(o.organismo||'')}</td>
+          <td class="num">${o.monto?money(o.monto):'<span class="muted">—</span>'}</td>
+          <td class="muted">${o.fechaCierre?fmtDateCL(o.fechaCierre.slice(0,10)):'—'}</td>
         </tr>`).join('')}
         </tbody></table></div>`; })()}
     </div>
 
     <div class="panel">
       <div class="row between">
-        <h2 style="margin:0">Compra Ágil — donde Gary cotizó (${(MERCADO.compraAgil||[]).length})</h2>
+        <h2 style="margin:0">Todo lo que hemos postulado</h2>
         <button class="btn ghost sm" onclick="refrescarCompraAgil(false)" ${mercadoCompraAgilBuscando?'disabled':''}>${mercadoCompraAgilBuscando?'Revisando…':'🔍 Revisar ahora'}</button>
       </div>
-      <div class="muted" style="margin-bottom:6px">Busca por tus palabras clave en Compra Ágil y revisa el detalle de cada proceso para ver si el RUT de Gary (${RUT_TALLER}) aparece cotizando. Solo se detecta automático — Compra Ágil no se puede filtrar por cotización nuestra en nuestra herramienta.</div>
-      <div class="muted" style="font-size:12px;margin-bottom:10px">${MERCADO.ultimaBusquedaCompraAgilISO? 'Última revisión: '+new Date(MERCADO.ultimaBusquedaCompraAgilISO).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : 'Aún no se ha revisado.'} — se revisa sola cada 6 horas.</div>
-      ${(()=>{ const lista=(MERCADO.compraAgil||[]).slice().sort((a,b)=>(a.fechaCierre||'')<(b.fechaCierre||'')?1:-1);
-        if(!lista.length) return `<div class="muted">Todavía no se ha detectado ninguna Compra Ágil donde cotizó Gary. Si sabes que hay una activa, prueba "🔍 Revisar ahora".</div>`;
-        return `<div style="overflow-x:auto"><table style="min-width:800px"><thead><tr><th>Código</th><th>Nombre</th><th>Organismo</th><th class="num">Monto ofertado</th><th>Cierre</th><th>Estado</th></tr></thead><tbody>
-        ${lista.map(c=>`<tr>
-          <td class="muted">${esc(c.codigo)}</td><td><b>${esc(c.nombre||'')}</b></td><td class="muted">${esc(c.organismo||'')}</td>
+      <div class="muted" style="margin-bottom:10px">Junta lo detectado en Compra Ágil (por RUT de Gary, ${RUT_TALLER}) y las cotizaciones de "Costos y Cotizaciones" con un código de licitación asociado. Incluye adjudicadas, no adjudicadas y pendientes de cierre.</div>
+      <div class="row" style="margin-bottom:10px">
+        <div class="field" style="margin:0;max-width:170px"><label>Desde</label><input type="date" id="mkPostDesde" value="${esc(rangoPostuladoDesde())}"></div>
+        <div class="field" style="margin:0;max-width:170px"><label>Hasta</label><input type="date" id="mkPostHasta" value="${esc(rangoPostuladoHasta())}"></div>
+        <button class="btn ghost sm" style="align-self:flex-end" onclick="reiniciarFiltroPostulado()">Últimos 7 días</button>
+      </div>
+      <div class="muted" style="font-size:12px;margin-bottom:10px">${MERCADO.ultimaBusquedaCompraAgilISO? 'Compra Ágil revisada por última vez: '+new Date(MERCADO.ultimaBusquedaCompraAgilISO).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : 'Compra Ágil: aún no se ha revisado.'} — se revisa sola cada 6 horas.</div>
+      ${(()=>{ const lista=listaPostulado();
+        if(!lista.length) return `<div class="muted">No hay postulaciones en ese rango de fechas.</div>`;
+        return `<div style="overflow-x:auto"><table style="min-width:800px"><thead><tr><th>Fecha</th><th>Origen</th><th>Código</th><th>Nombre/Cliente</th><th class="num">Monto</th><th>Estado</th></tr></thead><tbody>
+        ${lista.map(c=>`<tr style="cursor:pointer" onclick="irADetallePostulado('${c.tipo}','${esc(c.tipo==='compra_agil'?c.codigo:c.id)}')" title="Ver detalle">
+          <td class="muted">${c.fecha?fmtDateCL(c.fecha):'—'}</td>
+          <td>${c.tipo==='compra_agil'?'<span class="badge b-pend">Compra Ágil</span>':'<span class="badge b-acept">Licitación</span>'}</td>
+          <td><b>${esc(c.codigo||'—')}</b></td><td class="muted">${esc(c.nombre||'')}</td>
           <td class="num">${c.monto?money(c.monto):'<span class="muted">—</span>'}</td>
-          <td class="muted">${c.fechaCierre?fmtDateCL(c.fechaCierre.slice(0,10)):'—'}</td>
-          <td>${estadoOfertaBadge(c.estado)}</td>
+          <td>${c.tipo==='compra_agil'?estadoOfertaBadge(c.estado):estadoBadge(c.estado)}</td>
         </tr>`).join('')}
         </tbody></table></div>`; })()}
     </div>
