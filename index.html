@@ -2186,7 +2186,11 @@ function eliminarCotizacionCliente(id){
 
 /* ============================ MERCADO PÚBLICO ============================ */
 const KEY_MERCADO='taller_gary_mercado_v1';
-const PALABRAS_DEFAULT='bandera, asta, mástil, gallardete, pabellón nacional, estandarte';
+/* "asta" se sacó de la lista (v3): al ser tan corta, calzaba adentro de otras palabras
+   comunes como "hasta" y traía resultados sin relación (aun exigiendo palabra completa,
+   "asta" sola es demasiado genérica dentro de textos largos de licitación). */
+const PALABRAS_DEFAULT='bandera, mástil, gallardete, pabellón nacional, estandarte';
+const PALABRAS_VERSION=3;
 function loadMercado(){
   try{
     const raw=localStorage.getItem(KEY_MERCADO);
@@ -2194,11 +2198,11 @@ function loadMercado(){
       const m=JSON.parse(raw);
       // Migración: las cuentas creadas antes de tener esta lista de palabras clave por
       // defecto se actualizan una sola vez (no pisa cambios que el usuario haga después).
-      if(!m.palabrasVersion || m.palabrasVersion<2){ m.palabras=PALABRAS_DEFAULT; m.palabrasVersion=2; }
+      if(!m.palabrasVersion || m.palabrasVersion<PALABRAS_VERSION){ m.palabras=PALABRAS_DEFAULT; m.palabrasVersion=PALABRAS_VERSION; }
       return m;
     }
   }catch(e){ console.error(e); }
-  return { ticket:'', palabras:PALABRAS_DEFAULT, palabrasVersion:2,
+  return { ticket:'', palabras:PALABRAS_DEFAULT, palabrasVersion:PALABRAS_VERSION,
     decisiones:{} /* codigo -> 'interes' | 'descartada' */ };
 }
 function saveMercado(){ localStorage.setItem(KEY_MERCADO, JSON.stringify(MERCADO)); }
@@ -2301,10 +2305,19 @@ async function refrescarCompraAgil(silencioso){
       const idx=MERCADO.compraAgil.findIndex(x=>x.codigo===codigo);
       if(nuestra){
         nuevos++;
+        // Quién ganó (si ya se adjudicó) y en qué lugar quedamos nosotros por precio — la
+        // API no entrega un "puesto" oficial, así que se calcula ordenando los montos
+        // ofertados de menor a mayor (el criterio habitual, aunque no siempre es el único).
+        const ganadorProv=proveedores.find(p=>p.seleccion&&p.seleccion.proveedor_seleccionado);
+        const montos=proveedores.filter(p=>typeof p.monto_total==='number').map(p=>p.monto_total).sort((a,b)=>a-b);
+        const lugarPorMonto=(typeof nuestra.monto_total==='number' && montos.length)? montos.indexOf(nuestra.monto_total)+1 : null;
         const entry={ codigo, nombre:detalle.nombre, organismo:detalle.institucion&&detalle.institucion.organismo_comprador,
           monto:nuestra.monto_total, estado:estadoOfertaCompraAgil(detalle,nuestra),
           fechaCierre:detalle.fechas&&detalle.fechas.fecha_cierre,
-          fechaPublicacion:detalle.fechas&&detalle.fechas.fecha_publicacion };
+          fechaPublicacion:detalle.fechas&&detalle.fechas.fecha_publicacion,
+          totalOfertas:(detalle.resumen&&detalle.resumen.total_ofertas_recibidas)||proveedores.length||null,
+          lugarPorMonto,
+          ganador:ganadorProv?{ nombre:ganadorProv.razon_social, monto:ganadorProv.monto_total, esNosotros:normalizarRut(ganadorProv.rut_proveedor)===rutNorm }:null };
         if(idx>=0) MERCADO.compraAgil[idx]=entry; else MERCADO.compraAgil.push(entry);
       } else if(idx>=0){
         MERCADO.compraAgil.splice(idx,1); // ya no aparecemos cotizando (raro, pero por si acaso)
@@ -2428,17 +2441,40 @@ async function verFichaCompraAgil(codigo){
     const rutNorm=normalizarRut(RUT_TALLER);
     const proveedores=detalle.proveedores_cotizando||[];
     const nuestra=proveedores.find(p=>normalizarRut(p.rut_proveedor)===rutNorm);
+    const ganador=proveedores.find(p=>p.seleccion&&p.seleccion.proveedor_seleccionado);
     const docs=detalle.documentos||[];
+    const productos=detalle.productos_solicitados||detalle.items||[];
+    // La API usa a veces "presupuesto" y a veces "montos" para lo mismo, según el endpoint.
+    const presu=detalle.presupuesto||detalle.montos||{};
+    const montoDisponible=presu.monto_disponible_clp||presu.monto_disponible;
+    const presupuestoEstimado=presu.presupuesto_estimado;
+    const conv=detalle.convocatoria||{};
+    const entrega=detalle.entrega||{};
+    const motivos=detalle.motivos||{};
+    const totalOfertas=detalle.resumen&&detalle.resumen.total_ofertas_recibidas;
     bg.querySelector('#fichaCaBody').innerHTML=`
       <h3 style="margin:0 0 4px">${esc(detalle.nombre||codigo)}</h3>
       <div class="muted" style="margin-bottom:12px">${esc(codigo)} · ${esc((detalle.institucion&&detalle.institucion.organismo_comprador)||'')}</div>
+      ${detalle.descripcion?`<div style="margin-bottom:14px">${esc(detalle.descripcion)}</div>`:''}
       <div class="cs-row"><span>Unidad de compra</span><b style="text-align:right;max-width:60%">${esc((detalle.institucion&&detalle.institucion.unidad_compra)||'—')}</b></div>
       <div class="cs-row"><span>Región</span><b>${esc((detalle.institucion&&detalle.institucion.nombre_region)||'—')}</b></div>
+      <div class="cs-row"><span>Estado del proceso</span><b>${esc((detalle.estado&&detalle.estado.glosa)||'—')}${conv.descripcion?' · '+esc(conv.descripcion):''}</b></div>
       <div class="cs-row"><span>Fecha publicación</span><b>${esc(fmtFechaHoraCL(detalle.fechas&&detalle.fechas.fecha_publicacion))}</b></div>
       <div class="cs-row"><span>Fecha cierre</span><b>${esc(fmtFechaHoraCL(detalle.fechas&&detalle.fechas.fecha_cierre))}</b></div>
-      <div class="cs-row"><span>Monto disponible</span><b>${(detalle.montos&&(detalle.montos.monto_disponible_clp||detalle.montos.monto_disponible))?money(detalle.montos.monto_disponible_clp||detalle.montos.monto_disponible):'—'}</b></div>
-      <div class="cs-row"><span>Estado del proceso</span><b>${esc((detalle.estado&&detalle.estado.glosa)||'—')}</b></div>
+      ${conv.fecha_cierre_segundo_llamado?`<div class="cs-row"><span>Cierre 2° llamado</span><b>${esc(fmtFechaHoraCL(conv.fecha_cierre_segundo_llamado))}</b></div>`:''}
+      <div class="cs-row"><span>Presupuesto estimado</span><b>${presupuestoEstimado?money(presupuestoEstimado):'—'}</b></div>
+      <div class="cs-row"><span>Monto disponible</span><b>${montoDisponible?money(montoDisponible):'—'}</b></div>
+      <div class="cs-row"><span>Dirección de entrega</span><b style="text-align:right;max-width:60%">${esc(entrega.direccion_entrega||'—')}</b></div>
+      <div class="cs-row"><span>Plazo de entrega</span><b>${entrega.plazo_entrega_dias!=null?entrega.plazo_entrega_dias+' días':'—'}</b></div>
+      <div class="cs-row"><span>Total ofertas recibidas</span><b>${totalOfertas!=null?totalOfertas:'—'}</b></div>
+      ${motivos.motivo_desierta?`<div class="cs-row"><span>Motivo desierta</span><b>${esc(motivos.motivo_desierta)}</b></div>`:''}
+      ${motivos.motivo_cancelacion?`<div class="cs-row"><span>Motivo cancelación</span><b>${esc(motivos.motivo_cancelacion)}</b></div>`:''}
+      ${ganador?`<div class="cs-row"><span>Ganador</span><b>${ganador.rut_proveedor&&normalizarRut(ganador.rut_proveedor)===rutNorm?'Gary':esc(ganador.razon_social||'—')}${ganador.monto_total?' · '+money(ganador.monto_total):''}</b></div>`:''}
       ${nuestra?`<div class="cs-row"><span>Nuestra oferta</span><b>${nuestra.monto_total?money(nuestra.monto_total):'—'} · ${esc((nuestra.estado_cotizacion&&nuestra.estado_cotizacion.glosa)||'')}</b></div>`:''}
+      ${productos.length?`<h3 style="margin:16px 0 6px">Productos solicitados</h3>
+        <table><thead><tr><th>Producto</th><th class="num">Cantidad</th><th>Unidad</th></tr></thead><tbody>
+        ${productos.map(p=>`<tr><td>${esc(p.nombre||p.NombreProducto||'')}${p.descripcion?`<div class="muted" style="font-size:12px">${esc(p.descripcion)}</div>`:''}</td><td class="num">${esc(p.cantidad||p.Cantidad||'')}</td><td class="muted">${esc(p.unidad_medida||'')}</td></tr>`).join('')}
+        </tbody></table>`:''}
       ${docs.length?`<h3 style="margin:16px 0 6px">Documentos adjuntos</h3>
         <div class="muted">${docs.map(d=>esc(d.nombre)).join('<br>')}</div>`:''}`;
   }catch(e){
@@ -2681,13 +2717,14 @@ function renderMercado(m){
       <div class="muted" style="font-size:12px;margin-bottom:10px">${MERCADO.ultimaBusquedaCompraAgilISO? 'Última revisión: '+new Date(MERCADO.ultimaBusquedaCompraAgilISO).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : 'Aún no se ha revisado.'} — se revisa sola cada 6 horas.</div>
       ${(()=>{ const lista=listaPostulado();
         if(!lista.length) return `<div class="muted">No hay postulaciones detectadas en ese rango de fechas.</div>`;
-        return `<div style="overflow-x:auto"><table style="min-width:850px"><thead><tr><th>Publicación</th><th>Código</th><th>Nombre</th><th>Organismo</th><th class="num">Monto ofertado</th><th>Cierre</th><th>Resultado</th></tr></thead><tbody>
+        return `<div style="overflow-x:auto"><table style="min-width:1050px"><thead><tr><th>Publicación</th><th>Código</th><th>Nombre</th><th class="num">Monto ofertado</th><th>Resultado</th><th>Ganador</th><th>Nuestro lugar</th></tr></thead><tbody>
         ${lista.map(c=>`<tr style="cursor:pointer" onclick="verFichaCompraAgil('${esc(c.codigo)}')" title="Ver ficha">
           <td class="muted">${fmtFechaHoraCL(c.fechaPublicacion)}</td>
-          <td><b>${esc(c.codigo||'—')}</b></td><td class="muted">${esc(c.nombre||'')}</td><td class="muted">${esc(c.organismo||'')}</td>
+          <td><b>${esc(c.codigo||'—')}</b></td><td class="muted">${esc(c.nombre||'')}</td>
           <td class="num">${c.monto?money(c.monto):'<span class="muted">—</span>'}</td>
-          <td class="muted">${fmtFechaHoraCL(c.fechaCierre)}</td>
           <td>${estadoOfertaBadge(c.estado)}</td>
+          <td class="muted">${c.ganador?(c.ganador.esNosotros?'<b>Gary</b>':esc(c.ganador.nombre||'—'))+(c.ganador.monto?' · '+money(c.ganador.monto):''):'—'}</td>
+          <td class="muted">${c.lugarPorMonto?`${c.lugarPorMonto}° de ${c.totalOfertas||'—'} (por monto)`:'—'}</td>
         </tr>`).join('')}
         </tbody></table></div>`; })()}
     </div>
