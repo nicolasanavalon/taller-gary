@@ -3727,7 +3727,11 @@ let prodStatFiltro=null;       // 'atrasados' | 'aldia' | 'aplicado' | 'sublim' 
 let prodSoloChile=false;
 function esBanderaDeChile(producto){
   const n=normalizarNombre(producto||'');
-  return n.includes('chile') || n.includes('pabellon nacional');
+  // "chile" solo (sin "chilena" ni "de chile") puede ser parte de otro nombre propio, ej.
+  // "Bandera Schoenstatt Chile" (la bandera de la sede chilena de esa fundación, no la
+  // bandera de Chile) — por eso se exige la forma "chilena" o "de Chile", no cualquier
+  // mención suelta de "chile".
+  return /\bchilena\b/.test(n) || n.includes('de chile') || n.includes('pabellon nacional');
 }
 function prodToggleSoloChile(){ prodSoloChile=!prodSoloChile; render(); }
 let prodSeleccion=new Set();
