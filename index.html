@@ -2183,6 +2183,122 @@ let MERCADO = loadMercado();
 let mercadoResultados=[];
 let mercadoBuscando=false;
 
+/* ---------- Compra Ágil: detectar automáticamente en cuáles cotizó Gary ---------- */
+/* Compra Ágil no permite filtrar por RUT de proveedor en la búsqueda (limitación de esa
+   API), así que se busca por palabra clave y, para cada resultado, se revisa el DETALLE
+   (que sí trae la lista de proveedores que cotizaron) buscando el RUT de Gary. Solo se
+   guardan los procesos donde Gary efectivamente aparece cotizando. */
+const RUT_TALLER='77.185.540-7';
+function normalizarRut(r){ return (r||'').replace(/[.\s]/g,'').toUpperCase(); }
+let mercadoCompraAgilBuscando=false;
+async function compraAgilProxyGet(params){
+  const qs=Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+  const r=await fetch(COSTOS_SYNC_URL+'?'+qs, {cache:'no-store'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+async function buscarCompraAgilPalabra(palabra){
+  const data=await compraAgilProxyGet({action:'compra_agil_lista', ticket:MERCADO.ticket, q:palabra, tamano_pagina:10, ordenar_por:'FechaUltimaModificacion'});
+  if(data.success!=='OK') throw new Error((data.errors&&data.errors[0]&&data.errors[0].mensaje)||'Error desconocido buscando "'+palabra+'"');
+  return (data.payload&&data.payload.items)||[];
+}
+async function chequearDetalleCompraAgil(codigo){
+  const data=await compraAgilProxyGet({action:'compra_agil_detalle', ticket:MERCADO.ticket, codigo});
+  if(data.success!=='OK') return null;
+  return data.payload;
+}
+function estadoOfertaCompraAgil(detalle, nuestraOferta){
+  const estadoProceso=detalle.estado&&detalle.estado.codigo;
+  const seleccionada=!!(nuestraOferta.seleccion&&nuestraOferta.seleccion.proveedor_seleccionado);
+  if(estadoProceso==='cancelada') return 'cancelada';
+  if(estadoProceso==='desierta') return 'desierta';
+  if(seleccionada) return 'adjudicada';
+  if(estadoProceso==='cerrada'||estadoProceso==='proveedor_seleccionado') return 'no_adjudicada';
+  return 'pendiente'; // publicada: todavía abierta, esperando cierre
+}
+/* Corre fn(item) para cada elemento de "items", pero como máximo "concurrencia" a la vez
+   (en vez de uno por uno, que era muy lento con muchos resultados por revisar). */
+async function procesarEnLotes(items, concurrencia, fn){
+  let i=0;
+  async function trabajador(){
+    while(i<items.length){ const idx=i++; await fn(items[idx], idx); }
+  }
+  const trabajadores=Array.from({length:Math.min(concurrencia, items.length)}, trabajador);
+  await Promise.all(trabajadores);
+}
+async function refrescarCompraAgil(silencioso){
+  if(!MERCADO.ticket){ if(!silencioso) toast('Primero guarda tu ticket.','error'); return; }
+  if(mercadoCompraAgilBuscando) return;
+  if(!MERCADO.compraAgilRevisados) MERCADO.compraAgilRevisados={};
+  if(!MERCADO.compraAgil) MERCADO.compraAgil=[];
+  mercadoCompraAgilBuscando=true; if(current==='mercado') render();
+  let nuevos=0, revisados=0, huboError=null;
+  try{
+    const palabras=(MERCADO.palabras||'').split(',').map(p=>p.trim()).filter(Boolean);
+    const candidatos={};
+    // Las búsquedas por palabra clave son independientes entre sí: se piden todas en paralelo.
+    await Promise.all(palabras.map(async palabra=>{
+      try{ (await buscarCompraAgilPalabra(palabra)).forEach(it=>{ candidatos[it.codigo]=it; }); }
+      catch(e){ console.error('Compra Ágil, error buscando "'+palabra+'":', e); huboError=e; }
+    }));
+    const rutNorm=normalizarRut(RUT_TALLER);
+    const pendientes=Object.keys(candidatos).filter(codigo=>{
+      const item=candidatos[codigo];
+      const cambio=item.fechas&&item.fechas.fecha_ultimo_cambio;
+      const yaRevisado=MERCADO.compraAgilRevisados[codigo];
+      return !(yaRevisado && yaRevisado.fechaUltimoCambio===cambio); // solo los que cambiaron desde la última revisión
+    });
+    revisados=pendientes.length;
+    // Los detalles sí se piden de a varios en paralelo (5 a la vez) para no demorar minutos.
+    await procesarEnLotes(pendientes, 5, async codigo=>{
+      const item=candidatos[codigo];
+      const cambio=item.fechas&&item.fechas.fecha_ultimo_cambio;
+      const detalle=await chequearDetalleCompraAgil(codigo);
+      if(!detalle) return;
+      const proveedores=detalle.proveedores_cotizando||[];
+      const nuestra=proveedores.find(p=>normalizarRut(p.rut_proveedor)===rutNorm);
+      MERCADO.compraAgilRevisados[codigo]={ esNuestra:!!nuestra, fechaUltimoCambio:cambio, chequeadoISO:new Date().toISOString() };
+      const idx=MERCADO.compraAgil.findIndex(x=>x.codigo===codigo);
+      if(nuestra){
+        nuevos++;
+        const entry={ codigo, nombre:detalle.nombre, organismo:detalle.institucion&&detalle.institucion.organismo_comprador,
+          monto:nuestra.monto_total, estado:estadoOfertaCompraAgil(detalle,nuestra), fechaCierre:detalle.fechas&&detalle.fechas.fecha_cierre };
+        if(idx>=0) MERCADO.compraAgil[idx]=entry; else MERCADO.compraAgil.push(entry);
+      } else if(idx>=0){
+        MERCADO.compraAgil.splice(idx,1); // ya no aparecemos cotizando (raro, pero por si acaso)
+      }
+    });
+    MERCADO.ultimaBusquedaCompraAgilISO=new Date().toISOString();
+    saveMercado();
+    if(!silencioso){
+      if(huboError) toast('Se revisó con errores en alguna palabra clave: '+huboError.message,'error');
+      else toast(`Compra Ágil: ${Object.keys(candidatos).length} encontradas, ${revisados} revisadas, ${nuevos} de Gary.`);
+    }
+  }catch(e){
+    console.error('Error general refrescando Compra Ágil:', e);
+    if(!silencioso) toast('Error: '+e.message,'error');
+  }
+  mercadoCompraAgilBuscando=false; if(current==='mercado') render();
+}
+function compraAgilDebeRefrescar(){
+  if(!MERCADO.ticket || mercadoCompraAgilBuscando) return false;
+  if(!MERCADO.ultimaBusquedaCompraAgilISO) return true;
+  const horas=(Date.now()-new Date(MERCADO.ultimaBusquedaCompraAgilISO).getTime())/3600000;
+  return horas>=6;
+}
+function mercadoAutoRefrescarCompraAgil(){
+  if(compraAgilDebeRefrescar()) refrescarCompraAgil(true);
+}
+let compraAgilAutoPoll=null;
+if(!compraAgilAutoPoll) compraAgilAutoPoll=setInterval(mercadoAutoRefrescarCompraAgil, 30*60*1000);
+mercadoAutoRefrescarCompraAgil();
+function estadoOfertaBadge(estado){
+  const map={ pendiente:['b-pend','⏳ Pendiente de cierre'], adjudicada:['b-acept','✔ Adjudicada'],
+    no_adjudicada:['b-rech','✕ No adjudicada'], desierta:['b-rech','— Desierta'], cancelada:['b-rech','⊘ Cancelada'] };
+  const [cls,txt]=map[estado]||['b-pend',estado];
+  return `<span class="badge ${cls}">${txt}</span>`;
+}
+
 function ddmmyyyy(iso){ const [y,m,d]=iso.split('-'); return d+m+y; }
 function jsonpFetch(url, timeoutMs){
   timeoutMs = timeoutMs||18000;
@@ -2368,6 +2484,25 @@ function renderMercado(m){
           <td><b>${esc(c.codigoMP)}</b></td><td class="muted">${esc(c.id)}</td><td>${esc(c.empresa)}</td>
           <td class="num">${c.total?money(c.total):'<span class="muted">—</span>'}</td>
           <td>${estadoBadge(c.estado||'Pendiente')}</td>
+        </tr>`).join('')}
+        </tbody></table></div>`; })()}
+    </div>
+
+    <div class="panel">
+      <div class="row between">
+        <h2 style="margin:0">Compra Ágil — donde Gary cotizó (${(MERCADO.compraAgil||[]).length})</h2>
+        <button class="btn ghost sm" onclick="refrescarCompraAgil(false)" ${mercadoCompraAgilBuscando?'disabled':''}>${mercadoCompraAgilBuscando?'Revisando…':'🔍 Revisar ahora'}</button>
+      </div>
+      <div class="muted" style="margin-bottom:6px">Busca por tus palabras clave en Compra Ágil y revisa el detalle de cada proceso para ver si el RUT de Gary (${RUT_TALLER}) aparece cotizando. Solo se detecta automático — Compra Ágil no se puede filtrar por cotización nuestra en nuestra herramienta.</div>
+      <div class="muted" style="font-size:12px;margin-bottom:10px">${MERCADO.ultimaBusquedaCompraAgilISO? 'Última revisión: '+new Date(MERCADO.ultimaBusquedaCompraAgilISO).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : 'Aún no se ha revisado.'} — se revisa sola cada 6 horas.</div>
+      ${(()=>{ const lista=(MERCADO.compraAgil||[]).slice().sort((a,b)=>(a.fechaCierre||'')<(b.fechaCierre||'')?1:-1);
+        if(!lista.length) return `<div class="muted">Todavía no se ha detectado ninguna Compra Ágil donde cotizó Gary. Si sabes que hay una activa, prueba "🔍 Revisar ahora".</div>`;
+        return `<div style="overflow-x:auto"><table style="min-width:800px"><thead><tr><th>Código</th><th>Nombre</th><th>Organismo</th><th class="num">Monto ofertado</th><th>Cierre</th><th>Estado</th></tr></thead><tbody>
+        ${lista.map(c=>`<tr>
+          <td class="muted">${esc(c.codigo)}</td><td><b>${esc(c.nombre||'')}</b></td><td class="muted">${esc(c.organismo||'')}</td>
+          <td class="num">${c.monto?money(c.monto):'<span class="muted">—</span>'}</td>
+          <td class="muted">${c.fechaCierre?fmtDateCL(c.fechaCierre.slice(0,10)):'—'}</td>
+          <td>${estadoOfertaBadge(c.estado)}</td>
         </tr>`).join('')}
         </tbody></table></div>`; })()}
     </div>
