@@ -279,6 +279,8 @@
   .prod-lightbox{position:fixed;inset:0;background:rgba(20,15,5,.72);z-index:220;display:flex;align-items:center;justify-content:center;padding:24px}
   .prod-lightbox img{max-width:92vw;max-height:78vh;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
   .prod-table tr.grupo-sep td{border-top:3px solid var(--gold-d)}
+  .prod-table tr.prod-subtotal td{background:var(--gold-soft);padding:6px 8px;font-size:12.5px}
+  .prod-table tr.prod-subtotal.total td{background:var(--gold-d);color:#fff;font-size:13.5px}
   .prod-table th.prod-col-freeze,.prod-table td.prod-col-freeze{position:sticky;left:0;z-index:1;background:#fff;box-shadow:2px 0 5px rgba(0,0,0,.10)}
   .prod-table thead th.prod-col-freeze{z-index:3;background:#faf7ef}
   .prod-table tr.sel td.prod-col-freeze{background:var(--gold-soft)}
@@ -3719,6 +3721,15 @@ function prodToggleCompacto(){
 let prodTab='vigentes';        // 'vigentes' | 'entregadas' | 'todo'
 let prodBusqueda='';
 let prodStatFiltro=null;       // 'atrasados' | 'aldia' | 'aplicado' | 'sublim' | null
+/* Filtro especial "🇨🇱": solo banderas de Chile, agrupadas y ordenadas por medida, con un
+   subtotal de cantidad por medida y un total general — para saber cuántas hay que hacer
+   en total entre todos los pedidos, sin importar de qué OT vengan. */
+let prodSoloChile=false;
+function esBanderaDeChile(producto){
+  const n=normalizarNombre(producto||'');
+  return n.includes('chile') || n.includes('pabellon nacional');
+}
+function prodToggleSoloChile(){ prodSoloChile=!prodSoloChile; render(); }
 let prodSeleccion=new Set();
 
 function diasDif(fCom){
@@ -3760,12 +3771,23 @@ function prodRowsVista(){
   if(prodStatFiltro==='sublim') rows=rows.filter(r=>!r.entregada && r.sublimacion);
   const q=(prodBusqueda||'').trim().toLowerCase();
   if(q) rows=rows.filter(r=>[r.ot,r.cliente,r.comuna,r.producto,r.etapa,r.tela,r.obs].some(v=>(''+(v||'')).toLowerCase().includes(q)));
-  // Ordenadas por fecha de compromiso (la más urgente primero) — como todas las filas de
-  // una misma OT comparten la misma fecha, quedan agrupadas juntas de forma natural.
-  rows=rows.slice().sort((a,b)=>{
-    const fa=a.fCom||'9999-99-99', fb=b.fCom||'9999-99-99';
-    return fa<fb?-1:(fa>fb?1:0);
-  });
+  if(prodSoloChile) rows=rows.filter(r=>esBanderaDeChile(r.producto));
+  if(prodSoloChile){
+    // Agrupadas por medida (para ver subtotales de cuántas hay que hacer de cada tamaño).
+    rows=rows.slice().sort((a,b)=>{
+      const ma=(a.medida||'').trim(), mb=(b.medida||'').trim();
+      if(ma!==mb) return ma<mb?-1:1;
+      const fa=a.fCom||'9999-99-99', fb=b.fCom||'9999-99-99';
+      return fa<fb?-1:(fa>fb?1:0);
+    });
+  } else {
+    // Ordenadas por fecha de compromiso (la más urgente primero) — como todas las filas de
+    // una misma OT comparten la misma fecha, quedan agrupadas juntas de forma natural.
+    rows=rows.slice().sort((a,b)=>{
+      const fa=a.fCom||'9999-99-99', fb=b.fCom||'9999-99-99';
+      return fa<fb?-1:(fa>fb?1:0);
+    });
+  }
   return rows;
 }
 function prodEmptyRowHtml(){
@@ -3808,7 +3830,35 @@ function prodFilaHtml(r, sep){
   </tr>`;
 }
 function prodFilasHtml(rows){
+  if(prodSoloChile) return prodFilasHtmlPorMedida(rows);
   return rows.map((r,i)=>prodFilaHtml(r, i>0 && rows[i-1].ot!==r.ot)).join('');
+}
+/* Las filas ya vienen ordenadas por medida (prodRowsVista) — acá solo se intercala un
+   subtotal cada vez que cambia la medida, y un total general al final. */
+function prodFilaSubtotalHtml(medida, subtotal, esTotal){
+  const label = esTotal? 'TOTAL banderas de Chile' : 'Subtotal '+esc(medida||'(sin medida)');
+  return `<tr class="prod-subtotal${esTotal?' total':''}">
+    <td colspan="10" style="text-align:right"><b>${label}</b></td>
+    <td class="num"><b>${subtotal}</b></td>
+    <td colspan="6"></td>
+  </tr>`;
+}
+function prodFilasHtmlPorMedida(rows){
+  let html='', medidaActual=null, subtotal=0, granTotal=0;
+  rows.forEach((r,i)=>{
+    const medida=(r.medida||'').trim();
+    if(medidaActual!==null && medida!==medidaActual){
+      html+=prodFilaSubtotalHtml(medidaActual, subtotal, false);
+      subtotal=0;
+    }
+    medidaActual=medida;
+    const cant=+r.cant||0;
+    subtotal+=cant; granTotal+=cant;
+    html+=prodFilaHtml(r, i>0 && rows[i-1].ot!==r.ot);
+  });
+  if(medidaActual!==null) html+=prodFilaSubtotalHtml(medidaActual, subtotal, false);
+  if(rows.length) html+=prodFilaSubtotalHtml('', granTotal, true);
+  return html;
 }
 function renderProduccion(m){
   const rows=prodRowsVista();
@@ -3837,6 +3887,9 @@ function renderProduccion(m){
       <div class="prod-tabs">
         <button class="${prodStatFiltro==='sublim'?'active':''}" onclick="prodFiltrarStat('sublim')" title="Solo filas marcadas Subli">Subli</button>
         <button class="${prodStatFiltro==='aplicado'?'active':''}" onclick="prodFiltrarStat('aplicado')" title="Solo filas marcadas Apli">Apli</button>
+      </div>
+      <div class="prod-tabs">
+        <button class="${prodSoloChile?'active':''}" onclick="prodToggleSoloChile()" title="Solo banderas de Chile, agrupadas por medida con subtotales">🇨🇱</button>
       </div>
       <div class="prod-tabs">
         <button class="${prodTab==='vigentes'?'active':''}" onclick="prodCambiarTab('vigentes')">Vigentes</button>
