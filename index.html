@@ -2218,17 +2218,16 @@ let mercadoBuscando=false;
 const RUT_TALLER='77.185.540-7';
 function normalizarRut(r){ return (r||'').replace(/[.\s]/g,'').toUpperCase(); }
 let mercadoCompraAgilBuscando=false;
-async function compraAgilProxyGet(params){
-  const qs=Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
-  // Si Google (Apps Script) se queda pegado por demasiadas llamadas seguidas, esto evita
-  // que la página quede esperando para siempre "Revisando…" sin nunca terminar.
+async function compraAgilProxyGetIntento_(qs){
+  // Si Google (Apps Script) se queda pegado, esto evita que la página quede esperando
+  // para siempre "Revisando…" sin nunca terminar.
   const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(), 15000);
+  const timer=setTimeout(()=>controller.abort(), 10000);
   let r;
   try{
     r=await fetch(COSTOS_SYNC_URL+'?'+qs, {cache:'no-store', signal:controller.signal});
   }catch(e){
-    if(e.name==='AbortError') throw new Error('Se agotó el tiempo de espera consultando Compra Ágil (Google está lento o saturado). Intenta de nuevo en un momento.');
+    if(e.name==='AbortError') throw new Error('Se agotó el tiempo de espera consultando Compra Ágil (Google está lento o saturado).');
     throw e;
   }finally{ clearTimeout(timer); }
   if(!r.ok) throw new Error('HTTP '+r.status);
@@ -2237,7 +2236,21 @@ async function compraAgilProxyGet(params){
   catch(e){
     // Si Google frena las llamadas por venir demasiado seguido, a veces responde con una
     // página de error en vez del JSON esperado — no es un error de esta app.
-    throw new Error('Google está limitando las llamadas por el momento (muchas seguidas). Espera un momento e intenta de nuevo.');
+    throw new Error('Google está limitando las llamadas por el momento (muchas seguidas).');
+  }
+}
+async function compraAgilProxyGet(params){
+  const qs=Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+  // Un solo reintento rápido: la mayoría de las fallas son pasajeras (Google lento un
+  // instante), así que reintentar una vez sale más a cuenta que fallar altiro.
+  try{
+    return await compraAgilProxyGetIntento_(qs);
+  }catch(e){
+    try{
+      return await compraAgilProxyGetIntento_(qs);
+    }catch(e2){
+      throw new Error(e2.message+' Intenta de nuevo en un momento.');
+    }
   }
 }
 async function buscarCompraAgilPalabra(palabra){
@@ -2245,17 +2258,28 @@ async function buscarCompraAgilPalabra(palabra){
   if(data.success!=='OK') throw new Error((data.errors&&data.errors[0]&&data.errors[0].mensaje)||'Error desconocido buscando "'+palabra+'"');
   return (data.payload&&data.payload.items)||[];
 }
-async function chequearDetalleCompraAgil(codigo){
+/* Cachea el detalle ya consultado (en memoria, no se guarda): si "refrescar" ya lo revisó
+   hace poco, abrir la ficha de eso mismo es instantáneo en vez de volver a consultar. */
+const mercadoDetalleCache={};
+const DETALLE_CACHE_MS=10*60*1000;
+async function chequearDetalleCompraAgil(codigo, forzar){
+  const cache=mercadoDetalleCache[codigo];
+  if(!forzar && cache && (Date.now()-cache.ts)<DETALLE_CACHE_MS) return cache.detalle;
   const data=await compraAgilProxyGet({action:'compra_agil_detalle', ticket:MERCADO.ticket, codigo});
   if(data.success!=='OK') return null;
+  mercadoDetalleCache[codigo]={detalle:data.payload, ts:Date.now()};
   return data.payload;
 }
+/* OJO: el campo real de la API es "proveedor_seleccionado" plano en cada proveedor
+   (0 o 1) — NO viene anidado bajo "seleccion" (eso era un supuesto equivocado de una
+   versión anterior, que hacía que "adjudicada" nunca se detectara). */
 function estadoOfertaCompraAgil(detalle, nuestraOferta){
   const estadoProceso=detalle.estado&&detalle.estado.codigo;
-  const seleccionada=!!(nuestraOferta.seleccion&&nuestraOferta.seleccion.proveedor_seleccionado);
+  const seleccionada=!!nuestraOferta.proveedor_seleccionado;
   if(estadoProceso==='cancelada') return 'cancelada';
   if(estadoProceso==='desierta') return 'desierta';
   if(seleccionada) return 'adjudicada';
+  if(nuestraOferta.justificacion_inadmisibilidad) return 'inadmisible';
   if(estadoProceso==='cerrada'||estadoProceso==='proveedor_seleccionado') return 'no_adjudicada';
   return 'pendiente'; // publicada: todavía abierta, esperando cierre
 }
@@ -2306,11 +2330,12 @@ async function refrescarCompraAgil(silencioso){
       if(nuestra){
         nuevos++;
         // Quién ganó (si ya se adjudicó) y en qué lugar quedamos nosotros por precio — la
-        // API no entrega un "puesto" oficial, así que se calcula ordenando los montos
-        // ofertados de menor a mayor (el criterio habitual, aunque no siempre es el único).
-        const ganadorProv=proveedores.find(p=>p.seleccion&&p.seleccion.proveedor_seleccionado);
-        const montos=proveedores.filter(p=>typeof p.monto_total==='number').map(p=>p.monto_total).sort((a,b)=>a-b);
-        const lugarPorMonto=(typeof nuestra.monto_total==='number' && montos.length)? montos.indexOf(nuestra.monto_total)+1 : null;
+        // API no entrega un "puesto" oficial, así que se calcula ordenando de menor a mayor
+        // solo entre las ofertas admisibles (una inadmisible no compite realmente por precio).
+        const ganadorProv=proveedores.find(p=>!!p.proveedor_seleccionado);
+        const admisibles=proveedores.filter(p=>!p.justificacion_inadmisibilidad);
+        const montos=admisibles.filter(p=>typeof p.monto_total==='number').map(p=>p.monto_total).sort((a,b)=>a-b);
+        const lugarPorMonto=(!nuestra.justificacion_inadmisibilidad && typeof nuestra.monto_total==='number' && montos.length)? montos.indexOf(nuestra.monto_total)+1 : null;
         const entry={ codigo, nombre:detalle.nombre, organismo:detalle.institucion&&detalle.institucion.organismo_comprador,
           monto:nuestra.monto_total, estado:estadoOfertaCompraAgil(detalle,nuestra),
           fechaCierre:detalle.fechas&&detalle.fechas.fecha_cierre,
@@ -2378,6 +2403,13 @@ function extraerOportunidad(item){
     monto: item.montos&&(item.montos.monto_disponible_clp||item.montos.monto_disponible)||0,
   };
 }
+/* Filtra otra vez por las palabras clave ACTUALES al momento de mostrar la lista (no solo
+   al buscar): así, si cambiaste las palabras o quedó algo guardado de antes de un ajuste al
+   filtro, no hace falta esperar la próxima búsqueda para que desaparezca de la vista. */
+function oportunidadesVigentesFiltradas(){
+  const palabras=(MERCADO.palabras||'').split(',').map(p=>p.trim()).filter(Boolean);
+  return (MERCADO.oportunidades||[]).filter(o=>coincidePalabraEnNombre(o.nombre, palabras));
+}
 async function refrescarOportunidadesCompraAgil(silencioso){
   if(!MERCADO.ticket){ if(!silencioso) toast('Primero guarda tu ticket.','error'); return; }
   if(mercadoOportunidadesBuscando) return;
@@ -2441,7 +2473,8 @@ async function verFichaCompraAgil(codigo){
     const rutNorm=normalizarRut(RUT_TALLER);
     const proveedores=detalle.proveedores_cotizando||[];
     const nuestra=proveedores.find(p=>normalizarRut(p.rut_proveedor)===rutNorm);
-    const ganador=proveedores.find(p=>p.seleccion&&p.seleccion.proveedor_seleccionado);
+    // OJO: "proveedor_seleccionado" viene plano en cada proveedor (0/1), no anidado.
+    const ganador=proveedores.find(p=>!!p.proveedor_seleccionado);
     const docs=detalle.documentos||[];
     const productos=detalle.productos_solicitados||detalle.items||[];
     // La API usa a veces "presupuesto" y a veces "montos" para lo mismo, según el endpoint.
@@ -2451,7 +2484,16 @@ async function verFichaCompraAgil(codigo){
     const conv=detalle.convocatoria||{};
     const entrega=detalle.entrega||{};
     const motivos=detalle.motivos||{};
-    const totalOfertas=detalle.resumen&&detalle.resumen.total_ofertas_recibidas;
+    const totalOfertas=(detalle.resumen&&detalle.resumen.total_ofertas_recibidas)!=null?detalle.resumen.total_ofertas_recibidas:proveedores.length;
+    // Estado de cada oferta en palabras simples: la API no manda una "glosa" de texto para
+    // esto, solo un código numérico sin documentar — se arma a partir de lo que sí es claro
+    // (seleccionada, o el motivo de inadmisibilidad si lo rechazaron).
+    function glosaOferta(p){
+      if(p.proveedor_seleccionado) return 'Seleccionada';
+      if(p.justificacion_inadmisibilidad) return 'Inadmisible: '+p.justificacion_inadmisibilidad.trim();
+      return 'Enviada';
+    }
+    const filas=proveedores.slice().sort((a,b)=>(a.monto_total||0)-(b.monto_total||0));
     bg.querySelector('#fichaCaBody').innerHTML=`
       <h3 style="margin:0 0 4px">${esc(detalle.nombre||codigo)}</h3>
       <div class="muted" style="margin-bottom:12px">${esc(codigo)} · ${esc((detalle.institucion&&detalle.institucion.organismo_comprador)||'')}</div>
@@ -2469,14 +2511,23 @@ async function verFichaCompraAgil(codigo){
       <div class="cs-row"><span>Total ofertas recibidas</span><b>${totalOfertas!=null?totalOfertas:'—'}</b></div>
       ${motivos.motivo_desierta?`<div class="cs-row"><span>Motivo desierta</span><b>${esc(motivos.motivo_desierta)}</b></div>`:''}
       ${motivos.motivo_cancelacion?`<div class="cs-row"><span>Motivo cancelación</span><b>${esc(motivos.motivo_cancelacion)}</b></div>`:''}
-      ${ganador?`<div class="cs-row"><span>Ganador</span><b>${ganador.rut_proveedor&&normalizarRut(ganador.rut_proveedor)===rutNorm?'Gary':esc(ganador.razon_social||'—')}${ganador.monto_total?' · '+money(ganador.monto_total):''}</b></div>`:''}
-      ${nuestra?`<div class="cs-row"><span>Nuestra oferta</span><b>${nuestra.monto_total?money(nuestra.monto_total):'—'} · ${esc((nuestra.estado_cotizacion&&nuestra.estado_cotizacion.glosa)||'')}</b></div>`:''}
+      ${ganador?`<div class="cs-row"><span>🏆 Ganador</span><b>${normalizarRut(ganador.rut_proveedor||'')===rutNorm?'Gary (nosotros)':esc(ganador.razon_social||'—')}${ganador.monto_total?' · '+money(ganador.monto_total):''}</b></div>`:(detalle.estado&&detalle.estado.codigo==='publicada'?'':`<div class="cs-row"><span>Ganador</span><b class="muted">Nadie seleccionado</b></div>`)}
       ${productos.length?`<h3 style="margin:16px 0 6px">Productos solicitados</h3>
         <table><thead><tr><th>Producto</th><th class="num">Cantidad</th><th>Unidad</th></tr></thead><tbody>
         ${productos.map(p=>`<tr><td>${esc(p.nombre||p.NombreProducto||'')}${p.descripcion?`<div class="muted" style="font-size:12px">${esc(p.descripcion)}</div>`:''}</td><td class="num">${esc(p.cantidad||p.Cantidad||'')}</td><td class="muted">${esc(p.unidad_medida||'')}</td></tr>`).join('')}
         </tbody></table>`:''}
-      ${docs.length?`<h3 style="margin:16px 0 6px">Documentos adjuntos</h3>
-        <div class="muted">${docs.map(d=>esc(d.nombre)).join('<br>')}</div>`:''}`;
+      ${filas.length?`<h3 style="margin:16px 0 6px">Quiénes cotizaron (${filas.length})</h3>
+        <div style="overflow-x:auto"><table style="min-width:600px"><thead><tr><th>Proveedor</th><th class="num">Monto total</th><th>Resultado</th></tr></thead><tbody>
+        ${filas.map(p=>{ const esGary=normalizarRut(p.rut_proveedor||'')===rutNorm;
+          return `<tr${esGary?' style="background:rgba(180,140,40,.12)"':''}>
+            <td>${esGary?'<b>Gary (nosotros)</b>':esc(p.razon_social||p.rut_proveedor||'—')}${p.descripcion?`<div class="muted" style="font-size:12px">${esc(p.descripcion)}</div>`:''}</td>
+            <td class="num">${p.monto_total?money(p.monto_total):'—'}</td>
+            <td class="muted">${p.proveedor_seleccionado?'🏆 ':''}${esc(glosaOferta(p))}</td>
+          </tr>`; }).join('')}
+        </tbody></table></div>`:(nuestra?'':`<div class="muted" style="margin-top:10px">Todavía no hay proveedores cotizando visibles para este proceso.</div>`)}
+      ${docs.length?`<h3 style="margin:16px 0 6px">Documentos adjuntos por el organismo</h3>
+        <div class="muted">${docs.map(d=>esc(d.nombre)).join('<br>')}<div style="margin-top:6px;font-size:12px">La API de Compra Ágil solo entrega el nombre de estos archivos, no permite descargarlos desde aquí — hay que verlos directamente en el portal de Mercado Público.</div></div>`:''}
+      <div class="muted" style="margin-top:14px;font-size:12px">Nota: la API no expone los documentos que subimos nosotros como oferentes (fichas técnicas, cartas de cotización, etc.) — esos solo se ven entrando al portal de Mercado Público con la cuenta de Gary.</div>`;
   }catch(e){
     bg.querySelector('#fichaCaBody').innerHTML=`<span style="color:var(--bad)">No se pudo cargar la ficha: ${esc(e.message)}</span>`;
   }
@@ -2503,7 +2554,8 @@ function listaPostulado(){
 
 function estadoOfertaBadge(estado){
   const map={ pendiente:['b-pend','⏳ Pendiente de cierre'], adjudicada:['b-acept','✔ Adjudicada'],
-    no_adjudicada:['b-rech','✕ No adjudicada'], desierta:['b-rech','— Desierta'], cancelada:['b-rech','⊘ Cancelada'] };
+    no_adjudicada:['b-rech','✕ No adjudicada'], inadmisible:['b-rech','✕ Inadmisible'],
+    desierta:['b-rech','— Desierta'], cancelada:['b-rech','⊘ Cancelada'] };
   const [cls,txt]=map[estado]||['b-pend',estado];
   return `<span class="badge ${cls}">${txt}</span>`;
 }
@@ -2687,12 +2739,12 @@ function renderMercado(m){
 
     <div class="panel">
       <div class="row between">
-        <h2 style="margin:0">Oportunidades de postulación vigentes (${(MERCADO.oportunidades||[]).length})</h2>
+        <h2 style="margin:0">Oportunidades de postulación vigentes (${oportunidadesVigentesFiltradas().length})</h2>
         <button class="btn ghost sm" onclick="refrescarOportunidadesCompraAgil(false)" ${mercadoOportunidadesBuscando?'disabled':''}>${mercadoOportunidadesBuscando?'Buscando…':'🔍 Buscar ahora'}</button>
       </div>
       <div class="muted" style="margin-bottom:6px">Todo lo publicado en Compra Ágil que sigue abierto ahora mismo, para tus palabras clave de arriba. Haz clic en una fila para ver el detalle.</div>
       <div class="muted" style="font-size:12px;margin-bottom:10px">${MERCADO.ultimaBusquedaOportunidadesISO? 'Última búsqueda: '+new Date(MERCADO.ultimaBusquedaOportunidadesISO).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : 'Aún no se ha buscado.'} — se busca sola cada 3 horas.</div>
-      ${(()=>{ const lista=(MERCADO.oportunidades||[]).slice().sort((a,b)=>(a.fechaCierre||'')<(b.fechaCierre||'')?-1:1);
+      ${(()=>{ const lista=oportunidadesVigentesFiltradas().sort((a,b)=>(a.fechaCierre||'')<(b.fechaCierre||'')?-1:1);
         if(!lista.length) return `<div class="muted">No hay oportunidades vigentes detectadas todavía. Prueba "🔍 Buscar ahora", o revisa que las palabras clave de arriba estén guardadas.</div>`;
         return `<div style="overflow-x:auto"><table style="min-width:850px"><thead><tr><th>Código</th><th>Nombre</th><th>Organismo</th><th class="num">Monto disponible</th><th>Cierre</th></tr></thead><tbody>
         ${lista.map(o=>`<tr style="cursor:pointer" onclick="verFichaCompraAgil('${esc(o.codigo)}')" title="Ver ficha">
