@@ -3731,8 +3731,10 @@ function esBanderaDeChile(producto){
   const n=normalizarNombre(producto||'');
   const palabras=n.split(/[^a-z0-9]+/).filter(Boolean);
   // El Pabellón Presidencial (lleva escudo al centro) NO es lo mismo que la bandera de
-  // Chile — se excluye, aunque empiece con "pab" o diga "presidencial" a secas.
-  if(palabras.some(w=>w.startsWith('presi'))) return false;
+  // Chile — se excluye, aunque empiece con "pab" o diga "presidencial" a secas. Las
+  // "(chinas)" tampoco son la bandera de Chile — es otro producto (parecido, pero
+  // distinto), aunque el nombre empiece con "Bandera Chilena" o "Pab. Nac".
+  if(palabras.some(w=>w.startsWith('presi')) || palabras.some(w=>w.startsWith('china'))) return false;
   // En Producción, "Pabellón Nacional" casi siempre viene abreviado: "Pab. Nac", "Pab.
   // Nacc" (con error de tipeo), "Pab. Nac (Chinas)", etc. — con que la palabra empiece
   // con "pab" basta (cubre además "Pabellón"/"Pabellon" completo y "de Desfile").
