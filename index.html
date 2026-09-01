@@ -3729,15 +3729,19 @@ let prodStatFiltro=null;       // 'atrasados' | 'aldia' | 'aplicado' | 'sublim' 
 let prodSoloChile=false;
 function esBanderaDeChile(producto){
   const n=normalizarNombre(producto||'');
+  const palabras=n.split(/[^a-z0-9]+/).filter(Boolean);
+  // El Pabellón Presidencial (lleva escudo al centro) NO es lo mismo que la bandera de
+  // Chile — se excluye, aunque empiece con "pab" o diga "presidencial" a secas.
+  if(palabras.some(w=>w.startsWith('presi'))) return false;
+  // En Producción, "Pabellón Nacional" casi siempre viene abreviado: "Pab. Nac", "Pab.
+  // Nacc" (con error de tipeo), "Pab. Nac (Chinas)", etc. — con que la palabra empiece
+  // con "pab" basta (cubre además "Pabellón"/"Pabellon" completo y "de Desfile").
+  if(palabras.some(w=>w.startsWith('pab'))) return true;
   // "chile" solo (sin "chilena" ni "de chile") puede ser parte de otro nombre propio, ej.
   // "Bandera Schoenstatt Chile" (la bandera de la sede chilena de esa fundación, no la
   // bandera de Chile) — por eso se exige la forma "chilena" o "de Chile", no cualquier
   // mención suelta de "chile".
-  // El "Pabellón Presidencial" NO es lo mismo (lleva el escudo al centro) — se excluye
-  // aunque diga "pabellón". El resto de los "pabellón ..." (Nacional, de Desfile, etc.)
-  // sí son banderas de Chile.
-  if(n.includes('presidencial')) return false;
-  return /\bchilena\b/.test(n) || n.includes('de chile') || /\bpabellon\b/.test(n);
+  return /\bchilena\b/.test(n) || n.includes('de chile');
 }
 /* Este filtro es solo para lo vigente (lo que falta por hacer) — al activarlo se fuerza
    la pestaña "Vigentes", sin importar cuál estuviera elegida antes. */
