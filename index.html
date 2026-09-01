@@ -236,6 +236,7 @@
   .prod-tabs button{border:none;background:transparent;padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--gold-d)}
   .prod-tabs button.active{background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.12);color:var(--ink)}
   .prod-tabs button.prod-chile-btn{padding:4px 8px;display:flex;align-items:center}
+  .prod-tabs button:disabled{opacity:.35;cursor:not-allowed}
   .prod-bulkbar{display:flex;align-items:center;gap:10px;background:var(--gold-soft);border-radius:12px;
     padding:9px 14px;margin-bottom:12px;font-size:13px;box-shadow:inset 0 0 0 1px var(--gold-line);flex-wrap:wrap}
   .prod-bulkbar b{color:var(--gold-d)}
@@ -3732,9 +3733,19 @@ function esBanderaDeChile(producto){
   // "Bandera Schoenstatt Chile" (la bandera de la sede chilena de esa fundación, no la
   // bandera de Chile) — por eso se exige la forma "chilena" o "de Chile", no cualquier
   // mención suelta de "chile".
-  return /\bchilena\b/.test(n) || n.includes('de chile') || n.includes('pabellon nacional');
+  // El "Pabellón Presidencial" NO es lo mismo (lleva el escudo al centro) — se excluye
+  // aunque diga "pabellón". El resto de los "pabellón ..." (Nacional, de Desfile, etc.)
+  // sí son banderas de Chile.
+  if(n.includes('presidencial')) return false;
+  return /\bchilena\b/.test(n) || n.includes('de chile') || /\bpabellon\b/.test(n);
 }
-function prodToggleSoloChile(){ prodSoloChile=!prodSoloChile; render(); }
+/* Este filtro es solo para lo vigente (lo que falta por hacer) — al activarlo se fuerza
+   la pestaña "Vigentes", sin importar cuál estuviera elegida antes. */
+function prodToggleSoloChile(){
+  prodSoloChile=!prodSoloChile;
+  if(prodSoloChile) prodTab='vigentes';
+  render();
+}
 /* Ícono propio de la bandera de Chile (en vez del emoji 🇨🇱, que en algunos sistemas sale
    chico/torcido o como código de país en vez de la bandera): un SVG con la proporción real
    de la bandera (3:2), para que se vea nítido y ocupe bien el botón sea cual sea el sistema. */
@@ -3779,7 +3790,11 @@ function prodStatsHtml(){
 }
 function prodRowsVista(){
   let rows=PRODUCCION.rows;
-  if(prodTab==='vigentes') rows=rows.filter(r=>!r.entregada);
+  if(prodSoloChile){
+    // Este filtro es solo para lo vigente (lo que falta por hacer) — sin importar qué
+    // pestaña (Vigentes/Entregadas/Todo) haya quedado elegida de antes.
+    rows=rows.filter(r=>!r.entregada);
+  } else if(prodTab==='vigentes') rows=rows.filter(r=>!r.entregada);
   else if(prodTab==='entregadas') rows=rows.filter(r=>r.entregada);
   if(prodStatFiltro==='atrasados') rows=rows.filter(r=>!r.entregada && diasDif(r.fCom)!=null && diasDif(r.fCom)<0);
   if(prodStatFiltro==='aldia') rows=rows.filter(r=>!r.entregada && diasDif(r.fCom)!=null && diasDif(r.fCom)>=0);
@@ -3789,10 +3804,13 @@ function prodRowsVista(){
   if(q) rows=rows.filter(r=>[r.ot,r.cliente,r.comuna,r.producto,r.etapa,r.tela,r.obs].some(v=>(''+(v||'')).toLowerCase().includes(q)));
   if(prodSoloChile) rows=rows.filter(r=>esBanderaDeChile(r.producto));
   if(prodSoloChile){
-    // Agrupadas por medida (para ver subtotales de cuántas hay que hacer de cada tamaño).
+    // Agrupadas por medida y luego por tela (para no mezclar, ej., Bistrech con Raso en el
+    // mismo subtotal — son cosas distintas aunque midan lo mismo).
     rows=rows.slice().sort((a,b)=>{
       const ma=(a.medida||'').trim(), mb=(b.medida||'').trim();
       if(ma!==mb) return ma<mb?-1:1;
+      const ta=(a.tela||'').trim(), tb=(b.tela||'').trim();
+      if(ta!==tb) return ta<tb?-1:1;
       const fa=a.fCom||'9999-99-99', fb=b.fCom||'9999-99-99';
       return fa<fb?-1:(fa>fb?1:0);
     });
@@ -3849,10 +3867,12 @@ function prodFilasHtml(rows){
   if(prodSoloChile) return prodFilasHtmlPorMedida(rows);
   return rows.map((r,i)=>prodFilaHtml(r, i>0 && rows[i-1].ot!==r.ot)).join('');
 }
-/* Las filas ya vienen ordenadas por medida (prodRowsVista) — acá solo se intercala un
-   subtotal cada vez que cambia la medida, y un total general al final. */
-function prodFilaSubtotalHtml(medida, subtotal, esTotal){
-  const label = esTotal? 'TOTAL banderas de Chile' : 'Subtotal '+esc(medida||'(sin medida)');
+/* Las filas ya vienen ordenadas por medida y luego por tela (prodRowsVista) — acá se
+   intercala un subtotal cada vez que cambia el grupo (medida+tela), y un total general
+   al final. Van separadas por tela porque, aunque midan lo mismo, un pedido en Bistrech y
+   otro en Raso no son lo mismo a producir. */
+function prodFilaSubtotalHtml(medida, tela, subtotal, esTotal){
+  const label = esTotal? 'TOTAL banderas de Chile' : 'Subtotal '+esc(medida||'(sin medida)')+(tela?' · '+esc(tela):'');
   return `<tr class="prod-subtotal${esTotal?' total':''}">
     <td colspan="10" style="text-align:right"><b>${label}</b></td>
     <td class="num"><b>${subtotal}</b></td>
@@ -3860,20 +3880,21 @@ function prodFilaSubtotalHtml(medida, subtotal, esTotal){
   </tr>`;
 }
 function prodFilasHtmlPorMedida(rows){
-  let html='', medidaActual=null, subtotal=0, granTotal=0;
+  let html='', grupoActual=null, subtotal=0, granTotal=0;
   rows.forEach((r,i)=>{
-    const medida=(r.medida||'').trim();
-    if(medidaActual!==null && medida!==medidaActual){
-      html+=prodFilaSubtotalHtml(medidaActual, subtotal, false);
+    const medida=(r.medida||'').trim(), tela=(r.tela||'').trim();
+    const grupo=medida+'‖'+tela;
+    if(grupoActual!==null && grupo!==grupoActual.grupo){
+      html+=prodFilaSubtotalHtml(grupoActual.medida, grupoActual.tela, subtotal, false);
       subtotal=0;
     }
-    medidaActual=medida;
+    grupoActual={grupo, medida, tela};
     const cant=+r.cant||0;
     subtotal+=cant; granTotal+=cant;
     html+=prodFilaHtml(r, i>0 && rows[i-1].ot!==r.ot);
   });
-  if(medidaActual!==null) html+=prodFilaSubtotalHtml(medidaActual, subtotal, false);
-  if(rows.length) html+=prodFilaSubtotalHtml('', granTotal, true);
+  if(grupoActual!==null) html+=prodFilaSubtotalHtml(grupoActual.medida, grupoActual.tela, subtotal, false);
+  if(rows.length) html+=prodFilaSubtotalHtml('', '', granTotal, true);
   return html;
 }
 function renderProduccion(m){
@@ -3909,8 +3930,8 @@ function renderProduccion(m){
       </div>
       <div class="prod-tabs">
         <button class="${prodTab==='vigentes'?'active':''}" onclick="prodCambiarTab('vigentes')">Vigentes</button>
-        <button class="${prodTab==='entregadas'?'active':''}" onclick="prodCambiarTab('entregadas')">Entregadas</button>
-        <button class="${prodTab==='todo'?'active':''}" onclick="prodCambiarTab('todo')">Todo</button>
+        <button class="${prodTab==='entregadas'?'active':''}" ${prodSoloChile?'disabled title="El filtro de banderas de Chile solo muestra lo vigente"':''} onclick="prodCambiarTab('entregadas')">Entregadas</button>
+        <button class="${prodTab==='todo'?'active':''}" ${prodSoloChile?'disabled title="El filtro de banderas de Chile solo muestra lo vigente"':''} onclick="prodCambiarTab('todo')">Todo</button>
       </div>
     </div>
 
