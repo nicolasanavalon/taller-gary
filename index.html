@@ -3811,11 +3811,13 @@ function prodRowsVista(){
   if(prodSoloChile) rows=rows.filter(r=>esBanderaDeChile(r.producto));
   if(prodSoloChile){
     // Agrupadas por medida y luego por tela (para no mezclar, ej., Bistrech con Raso en el
-    // mismo subtotal — son cosas distintas aunque midan lo mismo).
+    // mismo subtotal — son cosas distintas aunque midan lo mismo). Se agrupa por la forma
+    // NORMALIZADA (sin mayúsculas/minúsculas ni espacios de más), porque "3,00 X 2,00" y
+    // "3,00 x 2,00" son la misma medida aunque estén tipeadas distinto.
     rows=rows.slice().sort((a,b)=>{
-      const ma=(a.medida||'').trim(), mb=(b.medida||'').trim();
+      const ma=claveAgrupacion(a.medida), mb=claveAgrupacion(b.medida);
       if(ma!==mb) return ma<mb?-1:1;
-      const ta=(a.tela||'').trim(), tb=(b.tela||'').trim();
+      const ta=claveAgrupacion(a.tela), tb=claveAgrupacion(b.tela);
       if(ta!==tb) return ta<tb?-1:1;
       const fa=a.fCom||'9999-99-99', fb=b.fCom||'9999-99-99';
       return fa<fb?-1:(fa>fb?1:0);
@@ -3885,11 +3887,14 @@ function prodFilaSubtotalHtml(medida, tela, subtotal, esTotal){
     <td colspan="6"></td>
   </tr>`;
 }
+/* Espacios de más, y mayúsculas/minúsculas en la "x" (3,00 X 2,00 vs 3,00 x 2,00), no
+   deberían separar el mismo tamaño en dos subtotales distintos. */
+function claveAgrupacion(s){ return (s||'').trim().toLowerCase().replace(/\s+/g,' '); }
 function prodFilasHtmlPorMedida(rows){
   let html='', grupoActual=null, subtotal=0, granTotal=0;
   rows.forEach((r,i)=>{
     const medida=(r.medida||'').trim(), tela=(r.tela||'').trim();
-    const grupo=medida+'‖'+tela;
+    const grupo=claveAgrupacion(medida)+'‖'+claveAgrupacion(tela);
     if(grupoActual!==null && grupo!==grupoActual.grupo){
       html+=prodFilaSubtotalHtml(grupoActual.medida, grupoActual.tela, subtotal, false);
       subtotal=0;
