@@ -297,11 +297,8 @@
   .print-table tr.grupo-sep td{border-top:2px solid var(--gold-d)}
   .print-table tr.print-subtotal td{background:#f0e6cc;font-weight:700}
   .print-table tr.print-subtotal.total td{background:#b8860b;color:#fff}
-  .print-foto-cell{width:44px;padding:2px!important}
-  .print-foto{width:40px;height:30px;border-radius:6px;object-fit:cover;display:block}
-  .print-dif{font-weight:700}
-  .print-dif.late{color:#c0392b}
-  .print-dif.ok{color:#157a4b}
+  .print-foto-cell{width:78px;padding:2px!important}
+  .print-foto{width:74px;height:54px;border-radius:6px;object-fit:cover;display:block}
   @media print{
     body *{visibility:hidden}
     #prodPrintArea,#prodPrintArea *{visibility:visible}
@@ -4032,16 +4029,14 @@ function prodFilasHtmlPorMedida(rows){
    Tabla estática (sin inputs ni botones) con las mismas filas que se ven en pantalla
    (respeta la pestaña, el filtro 🇨🇱, la búsqueda, etc.), pensada para caber horizontal
    en una hoja — si hay muchas filas, sigue en las hojas que hagan falta verticalmente. */
+/* Fecha corta para la impresión (sin año, dd/mm) — la columna queda más angosta. */
+function fmtDateCLCorta(d){ if(!d) return '—'; const [,mo,da]=d.split('-'); return `${da}/${mo}`; }
 function prodFilaImpresionHtml(r, sep){
-  const d=diasDif(r.fCom);
-  const difHtml = d==null? '—' : `<span class="print-dif ${d<0?'late':'ok'}">${d}</span>`;
   const fotoHtml = r.foto? `<img src="${r.foto}" class="print-foto">` : '';
   return `<tr class="${sep?'grupo-sep':''}">
     <td>${esc(r.ot)}</td>
     <td>${esc(r.cliente)}</td>
-    <td>${esc(r.comuna)}</td>
-    <td>${r.fCom?fmtDateCL(r.fCom):'—'}</td>
-    <td class="num">${difHtml}</td>
+    <td>${r.fCom?fmtDateCLCorta(r.fCom):'—'}</td>
     <td class="print-foto-cell">${fotoHtml}</td>
     <td>${esc(r.producto)}</td>
     <td>${esc(r.medida)}</td>
@@ -4056,7 +4051,7 @@ function prodFilaImpresionHtml(r, sep){
 function prodFilaSubtotalImpresionHtml(medida, tela, subtotal, esTotal){
   const label = esTotal? 'TOTAL' : 'Subtotal '+esc(medida||'(sin medida)')+(tela?' · '+esc(tela):'');
   return `<tr class="print-subtotal${esTotal?' total':''}">
-    <td colspan="9" style="text-align:right"><b>${label}</b></td>
+    <td colspan="7" style="text-align:right"><b>${label}</b></td>
     <td class="num"><b>${subtotal}</b></td>
     <td colspan="4"></td>
   </tr>`;
@@ -4097,9 +4092,9 @@ function prodAbrirVistaImpresion(){
     <div class="print-sub">${esc(filtros.join(' · '))} — ${rows.length} fila(s) — impreso el ${esc(new Date().toLocaleString('es-CL'))}</div>
     <table class="print-table">
       <thead><tr>
-        <th>OT</th><th>Cliente</th><th>Comuna</th><th>F. Comp.</th><th>Dif</th><th>Foto</th><th>Producto</th><th>Medida</th><th>Tela</th><th>Cant</th><th>Subli</th><th>Apli</th><th>Obs</th><th>Status</th>
+        <th>ID</th><th>Cliente</th><th>F. Comp.</th><th>Foto</th><th>Producto</th><th>Medida</th><th>Tela</th><th>Cant</th><th>Subli</th><th>Apli</th><th>Obs</th><th>Status</th>
       </tr></thead>
-      <tbody>${rows.length? prodFilasImpresionHtml(rows) : '<tr><td colspan="14">Sin filas para mostrar.</td></tr>'}</tbody>
+      <tbody>${rows.length? prodFilasImpresionHtml(rows) : '<tr><td colspan="12">Sin filas para mostrar.</td></tr>'}</tbody>
     </table>`;
   window.print();
 }
