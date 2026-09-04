@@ -283,6 +283,23 @@
   .prod-table tr.grupo-sep td{border-top:3px solid var(--gold-d)}
   .prod-table tr.prod-subtotal td{background:var(--gold-soft);padding:6px 8px;font-size:12.5px}
   .prod-table tr.prod-subtotal.total td{background:var(--gold-d);color:#fff;font-size:13.5px}
+  /* ---------- Vista para imprimir (Producción) ---------- */
+  #prodPrintArea{display:none}
+  .print-sub{font-size:11px;color:#555;margin-bottom:10px}
+  .print-table{width:100%;border-collapse:collapse;font-size:9px}
+  .print-table th,.print-table td{border:1px solid #999;padding:3px 4px;text-align:left;vertical-align:top}
+  .print-table td.num,.print-table td.center{text-align:center}
+  .print-table thead{display:table-header-group}
+  .print-table tr{page-break-inside:avoid}
+  .print-table tr.grupo-sep td{border-top:2px solid #000}
+  .print-table tr.print-subtotal td{background:#f0e6cc;font-weight:700}
+  .print-table tr.print-subtotal.total td{background:#b8860b;color:#fff}
+  @media print{
+    body *{visibility:hidden}
+    #prodPrintArea,#prodPrintArea *{visibility:visible}
+    #prodPrintArea{display:block;position:absolute;top:0;left:0;width:100%}
+    @page{size:landscape;margin:10mm}
+  }
   .prod-table th.prod-col-freeze,.prod-table td.prod-col-freeze{position:sticky;left:0;z-index:1;background:#fff;box-shadow:2px 0 5px rgba(0,0,0,.10)}
   .prod-table thead th.prod-col-freeze{z-index:3;background:#faf7ef}
   .prod-table tr.sel td.prod-col-freeze{background:var(--gold-soft)}
@@ -4002,6 +4019,79 @@ function prodFilasHtmlPorMedida(rows){
   if(rows.length) html+=prodFilaSubtotalHtml('', '', granTotal, true);
   return html;
 }
+
+/* ---------- Vista para imprimir ----------
+   Tabla estática (sin inputs ni botones) con las mismas filas que se ven en pantalla
+   (respeta la pestaña, el filtro 🇨🇱, la búsqueda, etc.), pensada para caber horizontal
+   en una hoja — si hay muchas filas, sigue en las hojas que hagan falta verticalmente. */
+function prodFilaImpresionHtml(r, sep){
+  const d=diasDif(r.fCom);
+  return `<tr class="${sep?'grupo-sep':''}">
+    <td>${esc(r.ot)}</td>
+    <td>${esc(r.cliente)}</td>
+    <td>${esc(r.comuna)}</td>
+    <td>${r.fCom?fmtDateCL(r.fCom):'—'}</td>
+    <td class="num">${d==null?'—':d}</td>
+    <td>${esc(r.producto)}</td>
+    <td>${esc(r.medida)}</td>
+    <td>${esc(r.tela)}</td>
+    <td class="num">${esc(r.cant)}</td>
+    <td class="center">${r.sublimacion?'✓':''}</td>
+    <td class="center">${r.aplicada?'✓':''}</td>
+    <td>${esc(r.obs)}</td>
+    <td>${esc(r.etapa)}</td>
+  </tr>`;
+}
+function prodFilaSubtotalImpresionHtml(medida, tela, subtotal, esTotal){
+  const label = esTotal? 'TOTAL' : 'Subtotal '+esc(medida||'(sin medida)')+(tela?' · '+esc(tela):'');
+  return `<tr class="print-subtotal${esTotal?' total':''}">
+    <td colspan="8" style="text-align:right"><b>${label}</b></td>
+    <td class="num"><b>${subtotal}</b></td>
+    <td colspan="4"></td>
+  </tr>`;
+}
+function prodFilasImpresionHtml(rows){
+  if(!prodSoloChile) return rows.map((r,i)=>prodFilaImpresionHtml(r, i>0 && rows[i-1].ot!==r.ot)).join('');
+  let html='', grupoActual=null, subtotal=0, granTotal=0;
+  rows.forEach((r,i)=>{
+    const medida=(r.medida||'').trim(), tela=(r.tela||'').trim();
+    const grupo=claveAgrupacion(medida)+'‖'+claveAgrupacion(tela);
+    if(grupoActual!==null && grupo!==grupoActual.grupo){
+      html+=prodFilaSubtotalImpresionHtml(grupoActual.medida, grupoActual.tela, subtotal, false);
+      subtotal=0;
+    }
+    grupoActual={grupo, medida, tela};
+    const cant=+r.cant||0;
+    subtotal+=cant; granTotal+=cant;
+    html+=prodFilaImpresionHtml(r, i>0 && rows[i-1].ot!==r.ot);
+  });
+  if(grupoActual!==null) html+=prodFilaSubtotalImpresionHtml(grupoActual.medida, grupoActual.tela, subtotal, false);
+  if(rows.length) html+=prodFilaSubtotalImpresionHtml('', '', granTotal, true);
+  return html;
+}
+function prodAbrirVistaImpresion(){
+  const rows=prodRowsVista();
+  let area=document.getElementById('prodPrintArea');
+  if(!area){ area=document.createElement('div'); area.id='prodPrintArea'; document.body.appendChild(area); }
+  const filtros=[];
+  filtros.push(prodTab==='vigentes'?'Vigentes':prodTab==='entregadas'?'Entregadas':'Todo');
+  if(prodSoloChile) filtros.push('Solo banderas de Chile (agrupado por medida y tela)');
+  if(prodStatFiltro==='atrasados') filtros.push('Solo atrasados');
+  if(prodStatFiltro==='aldia') filtros.push('Solo al día');
+  if(prodStatFiltro==='aplicado') filtros.push('Solo Aplicado');
+  if(prodStatFiltro==='sublim') filtros.push('Solo Sublim.');
+  if((prodBusqueda||'').trim()) filtros.push('Búsqueda: "'+prodBusqueda.trim()+'"');
+  area.innerHTML=`
+    <h1>Taller Gary — Producción</h1>
+    <div class="print-sub">${esc(filtros.join(' · '))} — ${rows.length} fila(s) — impreso el ${esc(new Date().toLocaleString('es-CL'))}</div>
+    <table class="print-table">
+      <thead><tr>
+        <th>OT</th><th>Cliente</th><th>Comuna</th><th>F. Comp.</th><th>Dif</th><th>Producto</th><th>Medida</th><th>Tela</th><th>Cant</th><th>Subli</th><th>Apli</th><th>Obs</th><th>Status</th>
+      </tr></thead>
+      <tbody>${rows.length? prodFilasImpresionHtml(rows) : '<tr><td colspan="13">Sin filas para mostrar.</td></tr>'}</tbody>
+    </table>`;
+  window.print();
+}
 function renderProduccion(m){
   const rows=prodRowsVista();
   return `
@@ -4020,7 +4110,8 @@ function renderProduccion(m){
     ${prodStatsHtml()}
     `}
 
-    <div class="row" style="justify-content:flex-end;margin-bottom:6px">
+    <div class="row" style="justify-content:flex-end;margin-bottom:6px;gap:8px">
+      <button class="btn ghost sm" onclick="prodAbrirVistaImpresion()" title="Imprime la lista tal como está filtrada ahora">🖨️ Imprimir vista</button>
       <button class="btn ghost sm" onclick="prodToggleCompacto()">${prodCompacto?'🔽 Mostrar título y estadísticas':'🔼 Ocultar título y estadísticas'}</button>
     </div>
 
