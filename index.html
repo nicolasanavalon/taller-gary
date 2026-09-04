@@ -285,15 +285,23 @@
   .prod-table tr.prod-subtotal.total td{background:var(--gold-d);color:#fff;font-size:13.5px}
   /* ---------- Vista para imprimir (Producción) ---------- */
   #prodPrintArea{display:none}
+  #prodPrintArea h1{font-family:Georgia,serif;font-size:18px;color:var(--gold-d);margin:0 0 4px}
   .print-sub{font-size:11px;color:#555;margin-bottom:10px}
   .print-table{width:100%;border-collapse:collapse;font-size:9px}
-  .print-table th,.print-table td{border:1px solid #999;padding:3px 4px;text-align:left;vertical-align:top}
+  .print-table th,.print-table td{border:1px solid #ccc;padding:3px 4px;text-align:left;vertical-align:middle}
+  .print-table th{background:var(--gold-soft);color:var(--gold-d);font-weight:700;text-transform:uppercase;font-size:8px}
   .print-table td.num,.print-table td.center{text-align:center}
   .print-table thead{display:table-header-group}
   .print-table tr{page-break-inside:avoid}
-  .print-table tr.grupo-sep td{border-top:2px solid #000}
+  .print-table tr:nth-child(even){background:#fbf8f1}
+  .print-table tr.grupo-sep td{border-top:2px solid var(--gold-d)}
   .print-table tr.print-subtotal td{background:#f0e6cc;font-weight:700}
   .print-table tr.print-subtotal.total td{background:#b8860b;color:#fff}
+  .print-foto-cell{width:44px;padding:2px!important}
+  .print-foto{width:40px;height:30px;border-radius:6px;object-fit:cover;display:block}
+  .print-dif{font-weight:700}
+  .print-dif.late{color:#c0392b}
+  .print-dif.ok{color:#157a4b}
   @media print{
     body *{visibility:hidden}
     #prodPrintArea,#prodPrintArea *{visibility:visible}
@@ -4026,12 +4034,15 @@ function prodFilasHtmlPorMedida(rows){
    en una hoja — si hay muchas filas, sigue en las hojas que hagan falta verticalmente. */
 function prodFilaImpresionHtml(r, sep){
   const d=diasDif(r.fCom);
+  const difHtml = d==null? '—' : `<span class="print-dif ${d<0?'late':'ok'}">${d}</span>`;
+  const fotoHtml = r.foto? `<img src="${r.foto}" class="print-foto">` : '';
   return `<tr class="${sep?'grupo-sep':''}">
     <td>${esc(r.ot)}</td>
     <td>${esc(r.cliente)}</td>
     <td>${esc(r.comuna)}</td>
     <td>${r.fCom?fmtDateCL(r.fCom):'—'}</td>
-    <td class="num">${d==null?'—':d}</td>
+    <td class="num">${difHtml}</td>
+    <td class="print-foto-cell">${fotoHtml}</td>
     <td>${esc(r.producto)}</td>
     <td>${esc(r.medida)}</td>
     <td>${esc(r.tela)}</td>
@@ -4045,7 +4056,7 @@ function prodFilaImpresionHtml(r, sep){
 function prodFilaSubtotalImpresionHtml(medida, tela, subtotal, esTotal){
   const label = esTotal? 'TOTAL' : 'Subtotal '+esc(medida||'(sin medida)')+(tela?' · '+esc(tela):'');
   return `<tr class="print-subtotal${esTotal?' total':''}">
-    <td colspan="8" style="text-align:right"><b>${label}</b></td>
+    <td colspan="9" style="text-align:right"><b>${label}</b></td>
     <td class="num"><b>${subtotal}</b></td>
     <td colspan="4"></td>
   </tr>`;
@@ -4086,9 +4097,9 @@ function prodAbrirVistaImpresion(){
     <div class="print-sub">${esc(filtros.join(' · '))} — ${rows.length} fila(s) — impreso el ${esc(new Date().toLocaleString('es-CL'))}</div>
     <table class="print-table">
       <thead><tr>
-        <th>OT</th><th>Cliente</th><th>Comuna</th><th>F. Comp.</th><th>Dif</th><th>Producto</th><th>Medida</th><th>Tela</th><th>Cant</th><th>Subli</th><th>Apli</th><th>Obs</th><th>Status</th>
+        <th>OT</th><th>Cliente</th><th>Comuna</th><th>F. Comp.</th><th>Dif</th><th>Foto</th><th>Producto</th><th>Medida</th><th>Tela</th><th>Cant</th><th>Subli</th><th>Apli</th><th>Obs</th><th>Status</th>
       </tr></thead>
-      <tbody>${rows.length? prodFilasImpresionHtml(rows) : '<tr><td colspan="13">Sin filas para mostrar.</td></tr>'}</tbody>
+      <tbody>${rows.length? prodFilasImpresionHtml(rows) : '<tr><td colspan="14">Sin filas para mostrar.</td></tr>'}</tbody>
     </table>`;
   window.print();
 }
