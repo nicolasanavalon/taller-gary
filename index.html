@@ -3551,10 +3551,18 @@ function normalizarProduccion(data){
     }
     delete r.anexos;
   });
-  // Las OT de fábrica (1474…1488) siempre deben tener su hoja de referencia disponible,
-  // aunque sea una instalación nueva sin nada sincronizado todavía.
+  // Toda OT con una ficha de fábrica (PXSHEET) debe tenerla siempre disponible como
+  // primer anexo — se abre directo (sin descargar), así que conviene que sea lo primero
+  // que se ve al apretar "Anexos". Antes solo se agregaba si la OT no tenía NINGÚN anexo
+  // todavía, así que las que ya tenían un PDF/Excel real subido a mano se quedaban sin su
+  // ficha para siempre. Ahora se agrega igual (al principio de la lista) si falta, sin
+  // tocar los anexos que ya estaban.
   Object.keys(SEED_ANEXOS_OT).forEach(ot=>{
-    if(!data.anexosOT[ot]) data.anexosOT[ot]=SEED_ANEXOS_OT[ot].map(a=>({...a}));
+    if(!data.anexosOT[ot]) data.anexosOT[ot]=[];
+    const lista=data.anexosOT[ot];
+    SEED_ANEXOS_OT[ot].forEach(seedItem=>{
+      if(!lista.some(a=>a.id===seedItem.id)) lista.unshift({...seedItem});
+    });
   });
 }
 function loadProduccion(){
