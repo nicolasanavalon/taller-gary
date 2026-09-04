@@ -3555,13 +3555,17 @@ function normalizarProduccion(data){
   // primer anexo — se abre directo (sin descargar), así que conviene que sea lo primero
   // que se ve al apretar "Anexos". Antes solo se agregaba si la OT no tenía NINGÚN anexo
   // todavía, así que las que ya tenían un PDF/Excel real subido a mano se quedaban sin su
-  // ficha para siempre. Ahora se agrega igual (al principio de la lista) si falta, sin
-  // tocar los anexos que ya estaban.
+  // ficha para siempre. Esto se recalcula en cada carga/sincronización (no hace falta
+  // guardar nada especial en la nube): si falta, se agrega; si ya está pero no quedó
+  // primera (por ejemplo, porque algo la agregó al final del lado del servidor), se mueve
+  // al principio — sin tocar el orden de los demás anexos.
   Object.keys(SEED_ANEXOS_OT).forEach(ot=>{
     if(!data.anexosOT[ot]) data.anexosOT[ot]=[];
     const lista=data.anexosOT[ot];
     SEED_ANEXOS_OT[ot].forEach(seedItem=>{
-      if(!lista.some(a=>a.id===seedItem.id)) lista.unshift({...seedItem});
+      const idx=lista.findIndex(a=>a.id===seedItem.id);
+      if(idx===-1) lista.unshift({...seedItem});
+      else if(idx>0){ const [existente]=lista.splice(idx,1); lista.unshift(existente); }
     });
   });
 }
