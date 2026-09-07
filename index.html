@@ -44,6 +44,19 @@
   nav button.active{background:var(--gold-soft);color:var(--gold-d);box-shadow:inset 0 0 0 1px var(--gold-line)}
   nav button:hover{color:var(--ink)}
   nav .ic{font-size:15px}
+  /* ---------- Menú móvil colapsable (solo celular) ----------
+     En pantallas angostas, el menú de módulos y las barras de filtros de Producción
+     (Imprimir/Mostrar estadísticas, buscador, Subli/Apli, 🇨🇱, Vigentes/Entregadas/Todo)
+     parten ocultos para dejar más espacio a la tabla; un botón junto al estado de
+     sincronización los muestra/oculta. En escritorio nada de esto se activa nunca. */
+  .pill.mobile-only{display:none}
+  @media(max-width:760px){
+    .pill.mobile-only{display:inline-flex;align-items:center;justify-content:center}
+    nav{display:none}
+    .prod-toolbar-collapsible{display:none}
+    body.menu-movil-abierto nav{display:flex}
+    body.menu-movil-abierto .prod-toolbar-collapsible{display:block}
+  }
 
   main{padding:24px 24px;max-width:1440px;margin:0 auto}
   main.prod-main{max-width:none;width:100%;box-sizing:border-box;padding-left:28px;padding-right:28px}
@@ -462,6 +475,7 @@
   </div>
   <div class="grow"></div>
   <span id="headerSyncPill" class="pill prod-cloud-pill" style="display:none;margin-right:8px" onclick="prodSincronizarAhora(false)" title="Tocar para sincronizar ahora"></span>
+  <span id="mobileMenuToggle" class="pill mobile-only" style="margin-right:8px;cursor:pointer" onclick="toggleMenuMovil()" title="Mostrar/ocultar menú y filtros">☰</span>
   <span class="pill" id="clock">—</span>
 </header>
 
@@ -567,6 +581,16 @@ function go(id){
     [...nav.children].forEach(b=>b.classList.toggle('active',b.dataset.id===id));
     render();
   });
+}
+
+/* Solo tiene efecto en celular (ver CSS ".mobile-only"/"nav"/".prod-toolbar-collapsible"
+   dentro de @media max-width:760px) — en escritorio el menú y los filtros siempre se ven. */
+let menuMovilAbierto=false;
+function toggleMenuMovil(){
+  menuMovilAbierto=!menuMovilAbierto;
+  document.body.classList.toggle('menu-movil-abierto', menuMovilAbierto);
+  const btn=document.getElementById('mobileMenuToggle');
+  if(btn) btn.textContent = menuMovilAbierto?'✕':'☰';
 }
 
 function badge(status){
@@ -4116,6 +4140,7 @@ function renderProduccion(m){
     ${prodStatsHtml()}
     `}
 
+    <div class="prod-toolbar-collapsible">
     <div class="row" style="justify-content:flex-end;margin-bottom:6px;gap:8px">
       <button class="btn ghost sm" onclick="prodAbrirVistaImpresion()" title="Imprime la lista tal como está filtrada ahora">🖨️ Imprimir vista</button>
       <button class="btn ghost sm" onclick="prodToggleCompacto()">${prodCompacto?'🔽 Mostrar título y estadísticas':'🔼 Ocultar título y estadísticas'}</button>
@@ -4135,6 +4160,7 @@ function renderProduccion(m){
         <button class="${prodTab==='entregadas'?'active':''}" ${prodSoloChile?'disabled title="El filtro de banderas de Chile solo muestra lo vigente"':''} onclick="prodCambiarTab('entregadas')">Entregadas</button>
         <button class="${prodTab==='todo'?'active':''}" ${prodSoloChile?'disabled title="El filtro de banderas de Chile solo muestra lo vigente"':''} onclick="prodCambiarTab('todo')">Todo</button>
       </div>
+    </div>
     </div>
 
     ${prodSeleccion.size? `
