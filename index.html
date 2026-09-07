@@ -3662,7 +3662,14 @@ function normalizarProduccion(data){
     const lista=data.anexosOT[ot];
     SEED_ANEXOS_OT[ot].forEach(seedItem=>{
       const idx=lista.findIndex(a=>a.id===seedItem.id);
-      if(idx===-1) lista.unshift({...seedItem});
+      if(idx===-1){
+        const nuevoAnexo={...seedItem};
+        lista.unshift(nuevoAnexo);
+        // Sin este "op" explícito, el arreglo quedaba reparado solo en localStorage de
+        // este navegador — nunca llegaba a subirse a la nube (otro dispositivo lo seguía
+        // viendo sin la ficha). Con el op, el próximo guardado sí la sube de verdad.
+        if(typeof prodOpsExtra!=='undefined') prodOpsExtra.push({op:'addAnexo', ot, anexo:nuevoAnexo});
+      }
       else if(idx>0){ const [existente]=lista.splice(idx,1); lista.unshift(existente); }
     });
   });
@@ -3889,7 +3896,12 @@ function prodFusionarRemoto(remoto){
       huboNuevas=true;
     }
   });
+  // Si normalizarProduccion() repara algo en anexosOT (ej. una ficha de fábrica que
+  // faltaba, ver más abajo), ese arreglo también hay que subirlo a la nube — si no,
+  // queda "reparado" solo en este navegador y vuelve a faltar en cualquier otro.
+  const anexosAntes=JSON.stringify(PRODUCCION.anexosOT);
   normalizarProduccion(PRODUCCION);
+  if(JSON.stringify(PRODUCCION.anexosOT)!==anexosAntes) huboNuevas=true;
   prodGuardarLocal();
   return huboNuevas;
 }
