@@ -3104,176 +3104,14 @@ function headerBlockHTML2(it, i){
     </div>`;
 }
 function itemCardHTML2(it, i){
-  const r = calcularItem2(it);
   return `<div class="panel item-card" data-idx="${i}">
     <div class="item-body">
-    <div class="grid-tipo">
-      <div class="field"><label>Tipo de producto</label>
-        <select class="ci-tipoproducto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>Ancho (m)</label><input class="ci-ancho" type="text" inputmode="decimal" value="${it.ancho?esc(it.ancho):''}" placeholder="Ej: 3,00"></div>
-      <div class="field"><label>Alto (m)</label><input class="ci-alto" type="text" inputmode="decimal" value="${it.alto?esc(it.alto):''}" placeholder="Ej: 2,00"></div>
+    <div class="row" style="align-items:center;gap:12px;flex-wrap:nowrap;margin-bottom:14px">
+      <h2 style="margin:0;white-space:nowrap;font-family:Georgia,'Times New Roman',serif;font-size:17px;color:var(--ink)">Ítem ${i+1}</h2>
+      <input class="ci-tipo" style="flex:1;min-width:0" value="${esc(it.tipo)}" placeholder="Nombre de la bandera (ej: Chilena, Institucional, Ejército...)">
     </div>
-    <div class="grid-cant">
-      <div class="field"><label>Cantidad</label><input class="ci-cant" type="number" min="0" step="1" value="${it.cantidad}"></div>
-      <div class="field"><label>Nombre de bandera</label><input class="ci-tipo" value="${esc(it.tipo)}" placeholder="Chilena / Institucional / Ejército..."></div>
-    </div>
-
-    <label>Tela</label>
-    <div class="grid4">
-      <div class="field"><label>Tipo de tela</label><input class="ci-tipotela" value="${esc(it.tipoTela||'Bistrech')}" placeholder="Bistrech"></div>
-      <div class="field"><label>Tipo de vaina</label><select class="ci-tipovaina">${TIPOS_VAINA.map(tv=>`<option ${((it.tipoVaina||'Vaina de Lona')===tv)?'selected':''}>${tv}</option>`).join('')}</select></div>
-      <div class="field"><label>Especificación</label><select class="ci-tipoacabado">${TIPOS_ACABADO.map(ta=>`<option ${((it.tipoAcabado||'Confección')===ta)?'selected':''}>${ta}</option>`).join('')}</select></div>
-      <div class="field"><label>Cantidad de Estrellas</label><input class="ci-numestrellas" type="number" min="0" step="1" value="${r.numEstrellas}" ${r.creaActiva?'':'disabled'}></div>
-    </div>
-
-    <label>Foto de la bandera</label>
-    <div class="foto-box">
-      <div class="foto-preview" tabindex="0" title="Haz clic aquí y pega (Cmd+V) una imagen copiada">${it.foto?`<img src="${esc(it.foto)}">`:`<div class="foto-empty">Sin foto<br>(arrastra o pega aquí)</div>`}</div>
-      <div class="foto-actions">
-        <button class="btn ghost sm foto-subir" type="button">📤 Subir foto</button>
-        <input type="file" accept="image/*" class="foto-file" style="display:none">
-        <button class="btn ghost sm foto-buscar" type="button">🔍 Buscar en galería</button>
-        ${it.foto?`<button class="btn ghost sm foto-quitar" type="button">✕ Quitar</button>`:''}
-      </div>
-    </div>
-    <input type="hidden" class="ci-foto" value="${esc(it.foto||'')}">
-
-    <div class="row between" style="margin:0">
-      <div class="section-title" style="margin:16px 0 8px">Telas</div>
-    </div>
-    <div class="tela-costeo-head"><div>Concepto</div><div>Cantidad</div><div>Costo unit.</div><div class="right">Total</div></div>
-    <div class="tela-costeo-row">
-      <div>Tela</div>
-      <div><span class="tela-cant">${formatNumCL(r.telaCant,1)}</span> <span class="unidad">m</span></div>
-      <input class="ci-telacosto" type="number" step="1" value="${r.telaCosto}">
-      <div class="tela-subtotal right">${money(r.telaSubtotal)}</div>
-    </div>
-    <div class="tela-costeo-row">
-      <div>Estrella ${r.creaActiva?'':'<span class="muted">(no aplica: no es Estrella)</span>'}</div>
-      <div class="argolla-cant-cell"><input class="ci-creacant" type="number" min="0" step="0.1" value="${r.creaCant}" ${r.creaActiva?'':'disabled'}> <span class="unidad">m</span></div>
-      <input class="ci-creacosto" type="number" step="1" value="${r.creaCosto}" ${r.creaActiva?'':'disabled'}>
-      <div class="crea-subtotal right">${money(r.creaSubtotal)}</div>
-    </div>
-    <div class="tela-costeo-row subtotal">
-      <div>Subtotal telas</div><div></div><div></div>
-      <div class="subtotal-telas right">${money(r.telaSubtotal+r.creaSubtotal)}</div>
-    </div>
-
-    <div class="row between" style="margin-top:6px">
-      <div class="section-title" style="margin:16px 0 8px">Accesorios</div>
-      <a href="#" class="tag" onclick="abrirMantenedorArgollas2();return false">⚙️ Editar tabla de argollas</a>
-    </div>
-    <div class="tela-costeo-head"><div>Concepto</div><div>Cantidad</div><div>Costo unit.</div><div class="right">Total</div></div>
-    <div class="tela-costeo-row">
-      <div>Huincha de poliéster ${r.esHuincha?'':'<span class="muted">(no aplica: vaina de lona)</span>'}</div>
-      <div><span class="huincha-cant">${formatNumCL(r.huinchaCant,1)}</span> <span class="unidad">m</span></div>
-      <input class="ci-huinchacosto" type="number" step="1" value="${r.huinchaCosto}">
-      <div class="huincha-subtotal right">${money(r.huinchaSubtotal)}</div>
-    </div>
-    <div class="tela-costeo-row">
-      <div>Argollas ${r.esHuincha?'':'<span class="muted">(no aplica)</span>'}</div>
-      <div class="argolla-cant-cell">
-        <span class="argollas-base">${r.argollasBase}</span><span class="muted">+</span>
-        <input class="ci-argollaextra" type="number" step="1" value="${it.argollaExtra||0}" title="Argolla extra (puede ser negativa para restar)"> <span class="unidad">un.</span>
-      </div>
-      <input class="ci-argollacosto" type="number" step="1" value="${r.argollaCosto}">
-      <div class="argolla-subtotal right">${money(r.argollaSubtotal)}</div>
-    </div>
-    <div class="tela-costeo-row subtotal">
-      <div>Subtotal accesorios</div><div></div><div></div>
-      <div class="subtotal-accesorios right">${money(r.subtotalAccesorios)}</div>
-    </div>
-
-    <div class="row between" style="margin-top:6px">
-      <div class="section-title" style="margin:16px 0 8px">Confección</div>
-      <div class="row" style="gap:6px">
-        <a href="#" class="tag" onclick="abrirMantenedorConfeccionPct2();return false">⚙️ % confección</a>
-        <a href="#" class="tag" onclick="abrirMantenedorArmado2();return false">⚙️ Armado</a>
-        <a href="#" class="tag" onclick="abrirMantenedorCortado2();return false">⚙️ Cortado</a>
-        <a href="#" class="tag" onclick="abrirMantenedorEstrella2();return false">⚙️ Festoneado</a>
-      </div>
-    </div>
-    <div class="confeccion-head"><div>Concepto</div><div></div><div>Costo</div><div class="right">Total</div></div>
-    <div class="confeccion-row ${r.armadoCosto===0?'warn':''}">
-      <div>Armado ${r.armadoCosto===0?'<span class="warn-tag">⚠ sin dato en mantenedor</span>':''}</div>
-      <div></div>
-      <input class="ci-armadocosto ${r.armadoCosto===0?'warn':''}" type="text" inputmode="numeric" value="${formatMiles(r.armadoCosto)}">
-      <div class="armado-subtotal right">${money(r.armadoSubtotal)}</div>
-    </div>
-    <div class="confeccion-row ${r.cortadoCosto===0?'warn':''}">
-      <div>Cortado ${r.cortadoCosto===0?'<span class="warn-tag">⚠ sin dato en mantenedor</span>':''}</div>
-      <div></div>
-      <input class="ci-cortadocosto ${r.cortadoCosto===0?'warn':''}" type="text" inputmode="numeric" value="${formatMiles(r.cortadoCosto)}">
-      <div class="cortado-subtotal right">${money(r.cortadoSubtotal)}</div>
-    </div>
-    <div class="confeccion-row ${r.estrellaCosto===0?'warn':''}">
-      <div>Festoneado ${r.estrellaCosto===0?'<span class="warn-tag">⚠ sin dato en mantenedor</span>':''}</div>
-      <div></div>
-      <input class="ci-estrellacosto ${r.estrellaCosto===0?'warn':''}" type="text" inputmode="numeric" value="${formatMiles(r.estrellaCosto)}">
-      <div class="estrella-subtotal right">${money(r.estrellaSubtotal)}</div>
-    </div>
-    <div class="confeccion-row">
-      <div>Limpieza/Embolsado <span class="muted" style="font-size:11px">(% Armado)</span></div>
-      <div></div>
-      <input class="ci-limpiezacosto" type="text" inputmode="numeric" value="${formatMiles(r.limpiezaCosto)}">
-      <div class="limpieza-subtotal right">${money(r.limpiezaSubtotal)}</div>
-    </div>
-    <div class="confeccion-row">
-      <div>Sublimado ${r.sublimadoAplica?'':'<span class="muted">(no aplica: Estrella)</span>'}</div>
-      <div></div>
-      <input class="ci-sublimadocosto" type="text" inputmode="numeric" value="${formatMiles(r.sublimadoCosto)}" ${r.sublimadoAplica?'':'disabled'}>
-      <div class="sublimado-subtotal right">${money(r.sublimadoSubtotal)}</div>
-    </div>
-    <div class="confeccion-row subtotal">
-      <div>Subtotal confección</div><div></div><div></div>
-      <div class="subtotal-confeccion right">${money(r.subtotalConfeccion)}</div>
-    </div>
-
-    <div class="cost-summary">
-      <div class="cs-row"><span>Subtotal A (materiales/procesos)</span><b class="cs-subtotalA">${money(r.subtotalA)}</b></div>
-    </div>
-    <div class="section-title" style="margin:16px 0 8px">Otros</div>
-    <div class="confeccion-head"><div>Concepto</div><div></div><div>%</div><div class="right">Total</div></div>
-    <div class="confeccion-row">
-      <div>Flete</div>
-      <div></div>
-      <div class="pct-cell"><input class="ci-flete pct" type="number" step="1" value="${formatPct(r.fletePct)}"> <span class="unidad">%</span></div>
-      <div class="flete-subtotal right">${money(r.flete)}</div>
-    </div>
-    <div class="confeccion-row">
-      <div>Costo Finan/Impos/Imprevisto</div>
-      <div></div>
-      <div class="pct-cell"><input class="ci-finimp pct" type="number" step="1" value="${formatPct(r.finImpPct)}"> <span class="unidad">%</span></div>
-      <div class="finimp-subtotal right">${money(r.finImp)}</div>
-    </div>
-    <div class="confeccion-row subtotal">
-      <div>Subtotal B</div><div></div><div></div>
-      <div class="cs-subtotalB right">${money(r.subtotalB)}</div>
-    </div>
-
-    <div class="cost-summary">
-      <div class="cs-row sub"><span>Total costo (A + B)</span><b class="cs-totalcosto">${money(r.totalCosto)}</b></div>
-    </div>
-    <div class="section-title" style="margin:16px 0 8px">Margen Unitario</div>
-    <div class="margen-escenarios">
-      ${MARGEN_ESCENARIOS.map(p=>`
-      <button type="button" class="margen-esc ${margenActivo(it,p)?'active':''}" data-pct="${p}">
-        <span class="me-pct">${Math.round(p*100)}%</span>
-        <span class="me-monto">${money(r.totalCosto*p)}</span>
-      </button>`).join('')}
-      <div class="margen-manual ${!margenEsEscenario(it)?'active':''}">
-        <span class="me-pct">Manual <input class="ci-margen" type="number" step="1" value="${formatPct(it.margenPct)}">%</span>
-        <span class="me-monto cs-margen">${money(r.margenMonto)}</span>
-      </div>
-    </div>
-    <div class="cost-summary">
-      <div class="section-title" style="margin:0 0 4px;font-size:15px">Performance Item ${i+1}</div>
-      <div class="cs-row hl"><span>Venta con IVA</span><b class="cs-totalconiva">${money(r.totalConIva)}</b></div>
-      <div class="cs-row"><span>Venta sin IVA</span><b class="cs-totalneto">${money(r.totalNeto)}</b></div>
-      <div class="cs-row"><span>Costo</span><b class="cs-costototal">${money(r.totalCosto*(+it.cantidad||0))}</b></div>
-      <div class="cs-row"><span>Margen</span><b class="cs-margentotal">${money(r.margenMonto*(+it.cantidad||0))}</b></div>
-      <div class="cs-row hl big"><span>Margen %</span><b class="cs-margenpct">${formatPct(r.totalCosto>0?r.margenMonto/r.totalCosto:0)}%</b></div>
+    <div class="field"><label>Tipo de producto</label>
+      <select class="ci-tipoproducto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
     </div>
     </div>
   </div>`;
@@ -3326,84 +3164,20 @@ function renderDetalleCotizacion2(c){
     </div>`;
 }
 function leerItemDeCard2(card){
-  const anchoV=card.querySelector('.ci-ancho').value.trim(), altoV=card.querySelector('.ci-alto').value.trim();
+  // El ítem por ahora solo tiene Nombre y Tipo de producto — se irán agregando más
+  // campos acá a medida que se vayan sumando de vuelta a la tarjeta.
   return {
-    medida:(anchoV&&altoV)? `${anchoV} x ${altoV} m` : '',
-    cantidad:+card.querySelector('.ci-cant').value||0,
     tipo:card.querySelector('.ci-tipo').value.trim(),
     tipoProducto:card.querySelector('.ci-tipoproducto').value,
-    foto:card.querySelector('.ci-foto').value||'',
-    alto:altoV,
-    ancho:anchoV,
-    tipoTela:card.querySelector('.ci-tipotela').value.trim(),
-    telaCosto:card.querySelector('.ci-telacosto').value,
-    creaCant:card.querySelector('.ci-creacant').value,
-    numEstrellas:card.querySelector('.ci-numestrellas').value,
-    creaCosto:card.querySelector('.ci-creacosto').value,
-    tipoVaina:card.querySelector('.ci-tipovaina').value,
-    huinchaCosto:card.querySelector('.ci-huinchacosto').value,
-    argollaCosto:card.querySelector('.ci-argollacosto').value,
-    argollaExtra:+card.querySelector('.ci-argollaextra').value||0,
-    tipoAcabado:card.querySelector('.ci-tipoacabado').value,
-    armadoCosto:parseMiles(card.querySelector('.ci-armadocosto').value),
-    cortadoCosto:parseMiles(card.querySelector('.ci-cortadocosto').value),
-    estrellaCosto:parseMiles(card.querySelector('.ci-estrellacosto').value),
-    limpiezaCosto:parseMiles(card.querySelector('.ci-limpiezacosto').value),
-    sublimadoCosto:parseMiles(card.querySelector('.ci-sublimadocosto').value),
-    fletePct:(+card.querySelector('.ci-flete').value||0)/100,
-    finImpPct:(+card.querySelector('.ci-finimp').value||0)/100,
-    margenPct:(+card.querySelector('.ci-margen').value||0)/100,
   };
 }
 function leerItemsDesdeDOM2(){
   return [...document.querySelectorAll('#itemsCot .item-card')].map(leerItemDeCard2);
 }
 function recalcCardDetalle2(card){
-  const wrap=$('#itemsCot'); if(!wrap) return;
-  const it=leerItemsDesdeDOM2()[[...wrap.children].indexOf(card)];
-  if(!it) return;
-  const r=calcularItem2(it);
-  card.querySelector('.cs-subtotalA').textContent=money(r.subtotalA);
-  card.querySelector('.flete-subtotal').textContent=money(r.flete);
-  card.querySelector('.finimp-subtotal').textContent=money(r.finImp);
-  card.querySelector('.cs-subtotalB').textContent=money(r.subtotalB);
-  card.querySelector('.cs-totalcosto').textContent=money(r.totalCosto);
-  card.querySelector('.cs-margen').textContent=money(r.margenMonto);
-  card.querySelector('.cs-totalneto').textContent=money(r.totalNeto);
-  card.querySelector('.cs-totalconiva').textContent=money(r.totalConIva);
-  const cantidad=+it.cantidad||0;
-  card.querySelector('.cs-costototal').textContent=money(r.totalCosto*cantidad);
-  card.querySelector('.cs-margentotal').textContent=money(r.margenMonto*cantidad);
-  card.querySelector('.cs-margenpct').textContent=formatPct(r.totalCosto>0?r.margenMonto/r.totalCosto:0)+'%';
-  card.querySelector('.tela-cant').textContent=formatNumCL(r.telaCant,1);
-  card.querySelector('.tela-subtotal').textContent=money(r.telaSubtotal);
-  card.querySelector('.crea-subtotal').textContent=money(r.creaSubtotal);
-  card.querySelector('.ci-creacosto').disabled=!r.creaActiva;
-  card.querySelector('.ci-creacant').disabled=!r.creaActiva;
-  card.querySelector('.ci-numestrellas').disabled=!r.creaActiva;
-  card.querySelector('.subtotal-telas').textContent=money(r.telaSubtotal+r.creaSubtotal);
-  card.querySelector('.huincha-cant').textContent=formatNumCL(r.huinchaCant,1);
-  card.querySelector('.huincha-subtotal').textContent=money(r.huinchaSubtotal);
-  card.querySelector('.argollas-base').textContent=r.argollasBase;
-  card.querySelector('.argolla-subtotal').textContent=money(r.argollaSubtotal);
-  card.querySelector('.subtotal-accesorios').textContent=money(r.subtotalAccesorios);
-  card.querySelector('.armado-subtotal').textContent=money(r.armadoSubtotal);
-  card.querySelector('.cortado-subtotal').textContent=money(r.cortadoSubtotal);
-  card.querySelector('.estrella-subtotal').textContent=money(r.estrellaSubtotal);
-  toggleWarnFila(card.querySelector('.ci-armadocosto'), r.armadoCosto===0);
-  toggleWarnFila(card.querySelector('.ci-cortadocosto'), r.cortadoCosto===0);
-  toggleWarnFila(card.querySelector('.ci-estrellacosto'), r.estrellaCosto===0);
-  card.querySelector('.limpieza-subtotal').textContent=money(r.limpiezaSubtotal);
-  card.querySelector('.ci-sublimadocosto').disabled=!r.sublimadoAplica;
-  card.querySelector('.sublimado-subtotal').textContent=money(r.sublimadoSubtotal);
-  card.querySelector('.subtotal-confeccion').textContent=money(r.subtotalConfeccion);
-  card.querySelectorAll('.margen-esc[data-pct]').forEach(btn=>{
-    const p=+btn.dataset.pct;
-    btn.classList.toggle('active', margenActivo(it,p));
-    btn.querySelector('.me-monto').textContent=money(r.totalCosto*p);
-  });
-  const manualBox=card.querySelector('.margen-manual');
-  if(manualBox) manualBox.classList.toggle('active', !margenEsEscenario(it));
+  // El ítem por ahora solo tiene Nombre y Tipo de producto — no hay nada que
+  // recalcular todavía. Se va a ir completando junto con itemCardHTML2/leerItemDeCard2
+  // a medida que se agreguen de vuelta los campos de costeo.
 }
 function recalcTotalesDetalle2(){
   const items=leerItemsDesdeDOM2();
