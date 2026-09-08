@@ -3109,9 +3109,7 @@ function itemCardHTML2(it, i){
     <div class="row" style="align-items:center;gap:12px;flex-wrap:nowrap;margin-bottom:14px">
       <h2 style="margin:0;white-space:nowrap;font-family:Georgia,'Times New Roman',serif;font-size:17px;color:var(--ink)">Ítem ${i+1}</h2>
       <input class="ci-tipo" style="flex:1;min-width:0" value="${esc(it.tipo)}" placeholder="Nombre de la bandera (ej: Chilena, Institucional, Ejército...)">
-    </div>
-    <div class="field"><label>Tipo de producto</label>
-      <select class="ci-tipoproducto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
+      <select class="ci-tipoproducto" style="flex:0 0 auto;width:auto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
     </div>
     </div>
   </div>`;
