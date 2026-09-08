@@ -517,6 +517,10 @@ const MODULES = [
       ['Cotización lista para presentar','Documento imprimible/PDF con el detalle de la oferta.'],
     ]},
 
+  { id:'costos2', nav:'Costos y Cotizaciones 2', icon:'🧪', stage:'2 · Oferta', hideCard:true,
+    title:'Costos y Cotizaciones 2', desc:'Módulo de pruebas — copia de "Costos y Cotizaciones" para trabajar cambios sin tocar el real.',
+    status:'soon', intro:'', conn:''},
+
   { id:'ot', nav:'Orden de Trabajo', icon:'📋', stage:'3 · Adjudicación',
     title:'Hoja de Orden de Trabajo',
     desc:'Orden interna que se genera cuando nos adjudicamos una Orden de Compra (OC).',
@@ -620,6 +624,10 @@ function render(){
   if(current==='costos'){
     if(costosView==='detalle') bindDetalleCotizacion();
     else bindCostosForm();
+  }
+  if(current==='costos2'){
+    if(costosView2==='detalle') bindDetalleCotizacion2();
+    else bindCostosForm2();
   }
   if(current==='mercado') bindMercadoForm();
   if(current==='produccion'){
@@ -1321,15 +1329,20 @@ function marcarSucia(){ cotizacionSucia=true; }
    que se llevaba tipeado. */
 let draftClienteSucio=false;
 function costosFormularioSucio(){
-  return current==='costos' && costosView==='lista' && draftClienteSucio;
+  return (current==='costos' && costosView==='lista' && draftClienteSucio)
+    || (current==='costos2' && costosView2==='lista' && draftClienteSucio2);
 }
 function advertirSalidaSiSucia(cb){
   if(current==='costos' && costosView==='detalle' && cotizacionSucia){
     confirmDialog('Tienes cambios sin guardar en esta cotización. ¿Quieres salir sin guardarlos?', ()=>{ cotizacionSucia=false; cb(); }, 'Salir sin guardar');
+  } else if(current==='costos2' && costosView2==='detalle' && cotizacionSucia2){
+    confirmDialog('Tienes cambios sin guardar en esta cotización. ¿Quieres salir sin guardarlos?', ()=>{ cotizacionSucia2=false; cb(); }, 'Salir sin guardar');
   } else cb();
 }
 window.addEventListener('beforeunload', e=>{
-  if((current==='costos' && costosView==='detalle' && cotizacionSucia) || costosFormularioSucio()){ e.preventDefault(); e.returnValue=''; }
+  if((current==='costos' && costosView==='detalle' && cotizacionSucia)
+    || (current==='costos2' && costosView2==='detalle' && cotizacionSucia2)
+    || costosFormularioSucio()){ e.preventDefault(); e.returnValue=''; }
 });
 function backupCostos(){
   const blob=new Blob([JSON.stringify(COSTOS,null,2)],{type:'application/json'});
@@ -2267,6 +2280,1473 @@ function eliminarCotizacionCliente(id){
   });
 }
 
+/* ============================ COSTOS Y COTIZACIONES 2 (módulo de pruebas, duplicado del anterior) ============================ */
+/* ============================ COSTOS2 Y COTIZACIONES ============================ */
+function esc(s){ return (s==null?'':''+s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+/* OJO: NO usar toISOString() acá — convierte a UTC, y en Chile (UTC-3/-4) eso hace que
+   pasadas las ~20-21h ya devuelva la fecha de MAÑANA en vez de hoy. Se arma la fecha con
+   los componentes LOCALES del reloj del navegador para que "hoy" sea siempre hoy. */
+function todayISO(){
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function fmtDateCL(d){ if(!d) return ''; const [y,mo,da]=d.split('-'); return `${da}/${mo}/${y}`; }
+/* Igual que fmtDateCL pero conserva la hora si la fecha viene como "YYYY-MM-DD HH:MM"
+   (formato típico de las fechas de Compra Ágil). */
+function fmtFechaHoraCL(f){
+  if(!f) return '—';
+  const [fecha,hora]=(''+f).split(' ');
+  if(!fecha) return '—';
+  return fmtDateCL(fecha)+(hora?' '+hora.slice(0,5):'');
+}
+function uid(){ return Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4); }
+/* Misma lógica de "hoy local" que todayISO(), pero restando N días. */
+function fechaHaceNDias(n){
+  const d=new Date(); d.setDate(d.getDate()-n);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+/* ---------- Galería de fotos de banderas (biblioteca reutilizable) ---------- */
+function loadFotos(){
+  try{ const raw=localStorage.getItem(KEY_FOTOS); if(raw) return JSON.parse(raw); }catch(e){ console.error(e); }
+  return {items:[]};
+}
+function saveFotos(){ localStorage.setItem(KEY_FOTOS, JSON.stringify(FOTOS)); }
+/* Cuenta en cuántos ítems de cotizaciones YA GUARDADAS se está usando esta foto ahora mismo.
+   No es un contador que se va sumando: se recalcula cada vez mirando el estado actual, así que
+   si editas un ítem y le cambias la foto, el reemplazo queda reflejado altiro (no queda "pegado" en 1). */
+function contarUsosFotoGuardada(imgDataUrl){
+  if(!imgDataUrl) return 0;
+  let n=0;
+  (COSTOS2.cotizaciones||[]).forEach(c=>(c.items||[]).forEach(it=>{ if(it.foto===imgDataUrl) n++; }));
+  return n;
+}
+function normalizarNombre(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); }
+
+/* ---------- Mantenedor: tabla de cantidad de argollas por medida (editable) ---------- */
+const KEY_TABLA_ARGOLLAS2='taller_gary_tabla_argollas2_v1';
+function seedTablaArgollas2(){
+  // Transcrito de "Tabla Confección y Accesorios Banderas Nacionales y Otras" (columna Cantidad Argollas)
+  return {filas:[
+    {largo:0.30,alto:0.20,argollas:3},{largo:0.40,alto:0.60,argollas:3},{largo:0.76,alto:0.61,argollas:3},
+    {largo:0.80,alto:0.54,argollas:3},{largo:0.90,alto:0.60,argollas:3},{largo:1.00,alto:0.66,argollas:3},
+    {largo:1.20,alto:0.80,argollas:3},{largo:1.28,alto:0.84,argollas:3},
+    {largo:1.50,alto:1.00,argollas:3},{largo:1.70,alto:1.12,argollas:4},{largo:1.80,alto:1.20,argollas:4},
+    {largo:2.10,alto:1.40,argollas:4},{largo:2.25,alto:1.50,argollas:4},{largo:2.55,alto:1.70,argollas:4},
+    {largo:3.00,alto:2.00,argollas:5},
+    {largo:4.00,alto:2.66,argollas:6},{largo:4.50,alto:3.00,argollas:6},{largo:5.00,alto:3.33,argollas:6},
+    {largo:6.00,alto:4.00,argollas:7},
+    {largo:8.00,alto:5.33,argollas:8},{largo:10.00,alto:7.50,argollas:10},{largo:11.00,alto:7.33,argollas:10},
+    {largo:13.50,alto:9.00,argollas:13},{largo:18.00,alto:12.00,argollas:14},
+  ]};
+}
+function loadTablaArgollas2(){
+  try{ const raw=localStorage.getItem(KEY_TABLA_ARGOLLAS2); if(raw) return JSON.parse(raw); }catch(e){ console.error(e); }
+  return seedTablaArgollas2();
+}
+function saveTablaArgollas2(){ localStorage.setItem(KEY_TABLA_ARGOLLAS2, JSON.stringify(TABLA_ARGOLLAS2)); }
+let TABLA_ARGOLLAS2 = loadTablaArgollas2();
+function argollasPorMedida2(ancho, alto){
+  const filas=TABLA_ARGOLLAS2.filas||[];
+  if(!filas.length || !(ancho&&alto)) return 0;
+  const L=Math.max(ancho,alto), A=Math.min(ancho,alto);
+  let mejor=filas[0], mejorDist=Infinity;
+  filas.forEach(f=>{ const d=Math.hypot(f.largo-L, f.alto-A); if(d<mejorDist){ mejorDist=d; mejor=f; } });
+  return mejor.argollas;
+}
+function filaTablaArgollasHTML2(f,i){
+  return `<div class="argollas-fila" data-i="${i}">
+    <input class="ta-largo" type="text" inputmode="decimal" value="${formatNumCL(f.largo)}">
+    <input class="ta-alto" type="text" inputmode="decimal" value="${formatNumCL(f.alto)}">
+    <input class="ta-argollas" type="number" min="0" step="1" value="${f.argollas}">
+    <button class="ta-del" type="button" title="Eliminar fila">✕</button>
+  </div>`;
+}
+function abrirMantenedorArgollas2(){
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box wide">
+    <div class="row between"><h2 style="margin:0">Tabla de argollas por medida</h2><button class="btn ghost sm" id="taClose" type="button">Cerrar</button></div>
+    <div class="muted" style="font-size:12px;margin:6px 0 10px">Editable. Se usa para calcular automáticamente la cantidad de argollas cuando el tipo de vaina es "Huincha de poliéster". Si una medida exacta no existe, se usa la más cercana.</div>
+    <div class="argollas-head"><div>Largo (m)</div><div>Alto (m)</div><div>Cant. argollas</div><div></div></div>
+    <div id="argollasWrap" style="overflow-y:auto;max-height:44vh">${TABLA_ARGOLLAS2.filas.map(filaTablaArgollasHTML2).join('')}</div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost sm" id="taAdd" type="button">+ Agregar fila</button>
+      <span class="grow"></span>
+      <button class="btn" id="taSave" type="button">Guardar tabla</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  const wrap=bg.querySelector('#argollasWrap');
+  bg.querySelector('#taClose').onclick=()=>bg.remove();
+  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove();
+    if(e.target.classList.contains('ta-del')) e.target.closest('.argollas-fila').remove(); });
+  bg.querySelector('#taAdd').onclick=()=>{
+    const div=document.createElement('div'); div.innerHTML=filaTablaArgollasHTML2({largo:0,alto:0,argollas:0},0);
+    wrap.appendChild(div.firstElementChild);
+  };
+  bg.querySelector('#taSave').onclick=()=>{
+    const filas=[...wrap.querySelectorAll('.argollas-fila')].map(r=>({
+      largo:parseNumCL(r.querySelector('.ta-largo').value),
+      alto:parseNumCL(r.querySelector('.ta-alto').value),
+      argollas:+r.querySelector('.ta-argollas').value||0,
+    }));
+    TABLA_ARGOLLAS2={filas}; saveTablaArgollas2();
+    bg.remove(); toast('Tabla de argollas guardada.');
+    render();
+  };
+}
+/* ---------- Mantenedor: Tarifado de Armado/Confección por medida (editable) ---------- */
+const KEY_TABLA_ARMADO2='taller_gary_tabla_armado2_v1';
+function seedTablaArmado2(){
+  // Transcrito de "Tarifado 2026 Gary" (mano de obra confección) — Banderas Regulares + Monumentales
+  return {filas:[
+    {ancho:0.30,alto:0.20,confeccion:500},{ancho:0.60,alto:0.40,confeccion:1000},{ancho:0.76,alto:0.61,confeccion:1430},
+    {ancho:0.80,alto:0.54,confeccion:1100},{ancho:1.00,alto:0.66,confeccion:1240},{ancho:1.20,alto:0.80,confeccion:1320},
+    {ancho:1.22,alto:1.00,confeccion:2080},{ancho:1.28,alto:0.84,confeccion:1320},{ancho:1.50,alto:1.00,confeccion:1760},
+    {ancho:1.70,alto:1.12,confeccion:2160},{ancho:1.80,alto:1.20,confeccion:2160},{ancho:2.10,alto:1.40,confeccion:2200},
+    {ancho:2.25,alto:1.50,confeccion:2420},{ancho:2.55,alto:1.70,confeccion:2420},{ancho:2.70,alto:1.80,confeccion:2620},
+    {ancho:3.00,alto:2.00,confeccion:3300},{ancho:3.55,alto:2.33,confeccion:4000},{ancho:4.00,alto:2.66,confeccion:4840},
+    {ancho:4.50,alto:3.00,confeccion:5445},{ancho:5.00,alto:3.33,confeccion:5800},{ancho:6.00,alto:4.00,confeccion:6200},
+    {ancho:7.00,alto:4.66,confeccion:9500},{ancho:8.00,alto:5.33,confeccion:13290},
+    {ancho:12.00,alto:8.00,confeccion:60000},{ancho:13.00,alto:8.67,confeccion:85000},{ancho:14.00,alto:9.33,confeccion:90000},
+    {ancho:15.00,alto:10.00,confeccion:95000},{ancho:16.00,alto:10.67,confeccion:105000},{ancho:17.00,alto:11.33,confeccion:120000},
+    {ancho:18.00,alto:12.00,confeccion:135000},
+  ]};
+}
+function loadTablaArmado2(){
+  try{ const raw=localStorage.getItem(KEY_TABLA_ARMADO2); if(raw) return JSON.parse(raw); }catch(e){ console.error(e); }
+  return seedTablaArmado2();
+}
+function saveTablaArmado2(){ localStorage.setItem(KEY_TABLA_ARMADO2, JSON.stringify(TABLA_ARMADO2)); }
+let TABLA_ARMADO2 = loadTablaArmado2();
+/* Se compara el LARGO (la dimensión mayor entre Ancho y Alto) contra el largo de cada fila
+   de la tabla. Se usa la fila cuyo largo esté MÁS CERCA, siempre que la diferencia sea de
+   como máximo 50 cm (0,50 m) — así una medida que no está tal cual en el mantenedor igual
+   toma el precio de la más parecida (ej: tabla tiene 13,50 x 9,00 → sirve para un pedido de
+   13,00 x 9,00, porque hay 0,50 m de diferencia entre 13,50 y 13,00).
+   Si ninguna fila queda dentro de esos 50 cm, no inventa nada: devuelve 0, editable a mano. */
+function buscarPorMedidaTolerante(filas, campo, ancho, alto){
+  if(!filas.length || !(ancho&&alto)) return 0;
+  const L=Math.max(ancho,alto);
+  let mejor=null, mejorDist=Infinity;
+  filas.forEach(f=>{
+    const dist=Math.abs(Math.max(f.ancho,f.alto)-L);
+    if(dist<=TOLERANCIA_MEDIDA && dist<mejorDist){ mejor=f; mejorDist=dist; }
+  });
+  return mejor ? mejor[campo] : 0;
+}
+function armadoPorMedida2(ancho, alto){
+  return buscarPorMedidaTolerante(TABLA_ARMADO2.filas||[], 'confeccion', ancho, alto);
+}
+function filaTablaArmadoHTML2(f){
+  return `<div class="argollas-fila">
+    <input class="tm-ancho" type="text" inputmode="decimal" value="${formatNumCL(f.ancho)}">
+    <input class="tm-alto" type="text" inputmode="decimal" value="${formatNumCL(f.alto)}">
+    <input class="tm-confeccion" type="number" min="0" step="1" value="${f.confeccion}">
+    <button class="tm-del" type="button" title="Eliminar fila">✕</button>
+  </div>`;
+}
+function abrirMantenedorArmado2(){
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box wide">
+    <div class="row between"><h2 style="margin:0">Tarifado de Armado / Confección</h2><button class="btn ghost sm" id="tmClose" type="button">Cerrar</button></div>
+    <div class="muted" style="font-size:12px;margin:6px 0 10px">Editable. Da el valor por defecto de "Armado": usa la fila cuyo Largo (la medida mayor) esté más cerca, con hasta 50 cm de diferencia. Si ninguna queda dentro de esos 50 cm, queda en $0 editable. Limpieza/Embolsado se calcula como % de este valor.</div>
+    <div class="argollas-head"><div>Ancho (m)</div><div>Alto (m)</div><div>Armado ($)</div><div></div></div>
+    <div id="armadoWrap" style="overflow-y:auto;max-height:44vh">${TABLA_ARMADO2.filas.map(filaTablaArmadoHTML2).join('')}</div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost sm" id="tmAdd" type="button">+ Agregar fila</button>
+      <span class="grow"></span>
+      <button class="btn" id="tmSave" type="button">Guardar tarifado</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  const wrap=bg.querySelector('#armadoWrap');
+  bg.querySelector('#tmClose').onclick=()=>bg.remove();
+  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove();
+    if(e.target.classList.contains('tm-del')) e.target.closest('.argollas-fila').remove(); });
+  bg.querySelector('#tmAdd').onclick=()=>{
+    const div=document.createElement('div'); div.innerHTML=filaTablaArmadoHTML2({ancho:0,alto:0,confeccion:0});
+    wrap.appendChild(div.firstElementChild);
+  };
+  bg.querySelector('#tmSave').onclick=()=>{
+    const filas=[...wrap.querySelectorAll('.argollas-fila')].map(r=>({
+      ancho:parseNumCL(r.querySelector('.tm-ancho').value),
+      alto:parseNumCL(r.querySelector('.tm-alto').value),
+      confeccion:+r.querySelector('.tm-confeccion').value||0,
+    }));
+    TABLA_ARMADO2={filas}; saveTablaArmado2();
+    bg.remove(); toast('Tarifado de Armado guardado.');
+    render();
+  };
+}
+/* ---------- Mantenedor: Cortado por medida (editable) ---------- */
+const KEY_TABLA_CORTADO2='taller_gary_tabla_cortado2_v1';
+function seedTablaCortado2(){
+  // Transcrito de "LISTADO M.O. CONFECCION.xlsx" (columna CORTADO)
+  return {filas:[
+    {ancho:0.30,alto:0.20,valor:400},{ancho:0.60,alto:0.40,valor:700},{ancho:0.76,alto:0.61,valor:700},
+    {ancho:0.80,alto:0.54,valor:800},{ancho:1.00,alto:0.66,valor:800},{ancho:1.20,alto:0.80,valor:900},
+    {ancho:1.22,alto:1.00,valor:900},{ancho:1.28,alto:0.84,valor:900},{ancho:1.50,alto:1.00,valor:1000},
+    {ancho:1.70,alto:1.12,valor:1000},{ancho:1.80,alto:1.20,valor:1000},{ancho:2.10,alto:1.40,valor:1100},
+    {ancho:2.25,alto:1.50,valor:1100},{ancho:2.55,alto:1.70,valor:1200},{ancho:2.70,alto:1.80,valor:1200},
+    {ancho:3.00,alto:2.00,valor:1200},{ancho:3.55,alto:2.33,valor:1250},{ancho:4.00,alto:2.66,valor:1300},
+    {ancho:4.50,alto:3.00,valor:1300},{ancho:5.00,alto:3.33,valor:1400},{ancho:6.00,alto:4.00,valor:1680},
+    {ancho:7.00,alto:4.66,valor:1680},
+  ]};
+}
+// Medidas nuevas detectadas en "Trabajos operarios Gary" (registro real de Esteban Moscoso, Corte) que no
+// estaban en el tarifado oficial. Se fusionan solas, sin pisar medidas que ya existan en la tabla.
+function fusionarMedidasNuevas(filas, nuevas){
+  const existe=(a,al)=>filas.some(f=>Math.abs(f.ancho-a)<0.005 && Math.abs(f.alto-al)<0.005);
+  nuevas.forEach(n=>{ if(!existe(n.ancho,n.alto)) filas.push({...n}); });
+  return filas;
+}
+function loadTablaCortado2(){
+  let data;
+  try{ const raw=localStorage.getItem(KEY_TABLA_CORTADO2); data = raw? JSON.parse(raw) : seedTablaCortado2(); }
+  catch(e){ console.error(e); data = seedTablaCortado2(); }
+  data.filas = fusionarMedidasNuevas(data.filas||[], CORTADO_MEDIDAS_NUEVAS);
+  return data;
+}
+function saveTablaCortado2(){ localStorage.setItem(KEY_TABLA_CORTADO2, JSON.stringify(TABLA_CORTADO2)); }
+let TABLA_CORTADO2 = loadTablaCortado2();
+function cortadoPorMedida2(ancho, alto){
+  return buscarPorMedidaTolerante(TABLA_CORTADO2.filas||[], 'valor', ancho, alto);
+}
+function filaTablaCortadoHTML2(f){
+  return `<div class="argollas-fila">
+    <input class="tc-ancho" type="text" inputmode="decimal" value="${formatNumCL(f.ancho)}">
+    <input class="tc-alto" type="text" inputmode="decimal" value="${formatNumCL(f.alto)}">
+    <input class="tc-valor" type="number" min="0" step="1" value="${f.valor}">
+    <button class="tc-del" type="button" title="Eliminar fila">✕</button>
+  </div>`;
+}
+function abrirMantenedorCortado2(){
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box wide">
+    <div class="row between"><h2 style="margin:0">Tarifado de Cortado</h2><button class="btn ghost sm" id="tcClose" type="button">Cerrar</button></div>
+    <div class="muted" style="font-size:12px;margin:6px 0 10px">Editable. Da el valor por defecto de "Cortado": usa la fila cuyo Largo (la medida mayor) esté más cerca, con hasta 50 cm de diferencia. Si ninguna queda dentro de esos 50 cm, queda en $0 editable.</div>
+    <div class="argollas-head"><div>Ancho (m)</div><div>Alto (m)</div><div>Cortado ($)</div><div></div></div>
+    <div id="cortadoWrap" style="overflow-y:auto;max-height:44vh">${TABLA_CORTADO2.filas.map(filaTablaCortadoHTML2).join('')}</div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost sm" id="tcAdd" type="button">+ Agregar fila</button>
+      <span class="grow"></span>
+      <button class="btn" id="tcSave" type="button">Guardar tarifado</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  const wrap=bg.querySelector('#cortadoWrap');
+  bg.querySelector('#tcClose').onclick=()=>bg.remove();
+  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove();
+    if(e.target.classList.contains('tc-del')) e.target.closest('.argollas-fila').remove(); });
+  bg.querySelector('#tcAdd').onclick=()=>{
+    const div=document.createElement('div'); div.innerHTML=filaTablaCortadoHTML2({ancho:0,alto:0,valor:0});
+    wrap.appendChild(div.firstElementChild);
+  };
+  bg.querySelector('#tcSave').onclick=()=>{
+    const filas=[...wrap.querySelectorAll('.argollas-fila')].map(r=>({
+      ancho:parseNumCL(r.querySelector('.tc-ancho').value),
+      alto:parseNumCL(r.querySelector('.tc-alto').value),
+      valor:+r.querySelector('.tc-valor').value||0,
+    }));
+    TABLA_CORTADO2={filas}; saveTablaCortado2();
+    bg.remove(); toast('Tarifado de Cortado guardado.');
+    render();
+  };
+}
+/* ---------- Mantenedor: Estrella por medida (editable) ---------- */
+const KEY_TABLA_ESTRELLA2='taller_gary_tabla_estrella2_v1';
+function seedTablaEstrella2(){
+  // Transcrito de "LISTADO M.O. CONFECCION.xlsx" (columna ESTRELLA)
+  return {filas:[
+    {ancho:0.30,alto:0.20,valor:330},{ancho:0.60,alto:0.40,valor:550},{ancho:0.76,alto:0.61,valor:600},
+    {ancho:0.80,alto:0.54,valor:650},{ancho:1.00,alto:0.66,valor:800},{ancho:1.20,alto:0.80,valor:900},
+    {ancho:1.22,alto:1.00,valor:600},{ancho:1.28,alto:0.84,valor:770},{ancho:1.50,alto:1.00,valor:990},
+    {ancho:1.70,alto:1.12,valor:990},{ancho:1.80,alto:1.20,valor:990},{ancho:2.10,alto:1.40,valor:1000},
+    {ancho:2.25,alto:1.50,valor:1020},{ancho:2.55,alto:1.70,valor:1020},{ancho:2.70,alto:1.80,valor:1100},
+    {ancho:3.00,alto:2.00,valor:1300},{ancho:3.55,alto:2.33,valor:1309},{ancho:4.00,alto:2.66,valor:1309},
+    {ancho:4.50,alto:3.00,valor:1870},{ancho:5.00,alto:3.33,valor:1870},{ancho:6.00,alto:4.00,valor:2860},
+    {ancho:7.00,alto:4.66,valor:5000},
+  ]};
+}
+// Medidas nuevas detectadas en "Trabajos operarios Gary" (registro real de Ana Rivera, Estrellas) que no
+// estaban en el tarifado oficial. Se fusionan solas, sin pisar medidas que ya existan en la tabla.
+function loadTablaEstrella2(){
+  let data;
+  try{ const raw=localStorage.getItem(KEY_TABLA_ESTRELLA2); data = raw? JSON.parse(raw) : seedTablaEstrella2(); }
+  catch(e){ console.error(e); data = seedTablaEstrella2(); }
+  data.filas = fusionarMedidasNuevas(data.filas||[], ESTRELLA_MEDIDAS_NUEVAS);
+  return data;
+}
+function saveTablaEstrella2(){ localStorage.setItem(KEY_TABLA_ESTRELLA2, JSON.stringify(TABLA_ESTRELLA2)); }
+let TABLA_ESTRELLA2 = loadTablaEstrella2();
+function estrellaPorMedida2(ancho, alto){
+  return buscarPorMedidaTolerante(TABLA_ESTRELLA2.filas||[], 'valor', ancho, alto);
+}
+function filaTablaEstrellaHTML2(f){
+  return `<div class="argollas-fila">
+    <input class="te-ancho" type="text" inputmode="decimal" value="${formatNumCL(f.ancho)}">
+    <input class="te-alto" type="text" inputmode="decimal" value="${formatNumCL(f.alto)}">
+    <input class="te-valor" type="number" min="0" step="1" value="${f.valor}">
+    <button class="te-del" type="button" title="Eliminar fila">✕</button>
+  </div>`;
+}
+function abrirMantenedorEstrella2(){
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box wide">
+    <div class="row between"><h2 style="margin:0">Tarifado de Festoneado</h2><button class="btn ghost sm" id="teClose" type="button">Cerrar</button></div>
+    <div class="muted" style="font-size:12px;margin:6px 0 10px">Editable. Da el valor por defecto de "Festoneado": usa la fila cuyo Largo (la medida mayor) esté más cerca, con hasta 50 cm de diferencia. Si ninguna queda dentro de esos 50 cm, queda en $0 editable. Cuando la Especificación es "Aplicado", el valor por defecto pasa a ser el mismo costo de Armado en vez del tarifado.</div>
+    <div class="argollas-head"><div>Ancho (m)</div><div>Alto (m)</div><div>Festoneado ($)</div><div></div></div>
+    <div id="estrellaWrap" style="overflow-y:auto;max-height:44vh">${TABLA_ESTRELLA2.filas.map(filaTablaEstrellaHTML2).join('')}</div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost sm" id="teAdd" type="button">+ Agregar fila</button>
+      <span class="grow"></span>
+      <button class="btn" id="teSave" type="button">Guardar tarifado</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  const wrap=bg.querySelector('#estrellaWrap');
+  bg.querySelector('#teClose').onclick=()=>bg.remove();
+  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove();
+    if(e.target.classList.contains('te-del')) e.target.closest('.argollas-fila').remove(); });
+  bg.querySelector('#teAdd').onclick=()=>{
+    const div=document.createElement('div'); div.innerHTML=filaTablaEstrellaHTML2({ancho:0,alto:0,valor:0});
+    wrap.appendChild(div.firstElementChild);
+  };
+  bg.querySelector('#teSave').onclick=()=>{
+    const filas=[...wrap.querySelectorAll('.argollas-fila')].map(r=>({
+      ancho:parseNumCL(r.querySelector('.te-ancho').value),
+      alto:parseNumCL(r.querySelector('.te-alto').value),
+      valor:+r.querySelector('.te-valor').value||0,
+    }));
+    TABLA_ESTRELLA2={filas}; saveTablaEstrella2();
+    bg.remove(); toast('Tarifado de Festoneado guardado.');
+    render();
+  };
+}
+/* ---------- Mantenedor: porcentajes de Festoneado/Limpieza-Embolsado ---------- */
+const KEY_CONFECCION_PCT2='taller_gary_confeccion_pct2_v1';
+function loadConfeccionPct2(){
+  try{ const raw=localStorage.getItem(KEY_CONFECCION_PCT2); if(raw){ const p=JSON.parse(raw);
+    if(p.limpieza===0.20) p.limpieza=0.10; // corrección: era 20% por error, debe ser 10%
+    return p; } }catch(e){ console.error(e); }
+  return {limpieza:0.10};
+}
+function saveConfeccionPct2(){ localStorage.setItem(KEY_CONFECCION_PCT2, JSON.stringify(CONFECCION_PCT2)); }
+let CONFECCION_PCT2 = loadConfeccionPct2();
+function abrirMantenedorConfeccionPct2(){
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box">
+    <h2 style="margin:0 0 6px">% de confección</h2>
+    <div class="muted" style="font-size:12px;margin-bottom:14px">Limpieza/Embolsado se calcula como % del Armado (se actualiza solo apenas cambia el Armado). Editable igual en cada ítem.</div>
+    <div class="field"><label>Limpieza/Embolsado (% de Armado)</label><input id="cpLimpieza" type="number" step="1" value="${(CONFECCION_PCT2.limpieza*100).toFixed(1)}"></div>
+    <div class="row" style="justify-content:flex-end">
+      <button class="btn ghost sm" id="cpClose" type="button">Cancelar</button>
+      <button class="btn sm" id="cpSave" type="button">Guardar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  bg.querySelector('#cpClose').onclick=()=>bg.remove();
+  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
+  bg.querySelector('#cpSave').onclick=()=>{
+    CONFECCION_PCT2={
+      limpieza:(+bg.querySelector('#cpLimpieza').value||0)/100,
+    };
+    saveConfeccionPct2();
+    bg.remove(); toast('Porcentaje de confección guardado.');
+    render();
+  };
+}
+function comprimirImagen(file, cb){
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const img=new Image();
+    img.onload=()=>{
+      const maxW=480, scale=Math.min(1, maxW/img.width);
+      const w=Math.round(img.width*scale)||1, h=Math.round(img.height*scale)||1;
+      const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      cb(canvas.toDataURL('image/jpeg',0.75));
+    };
+    img.onerror=()=>toast('No se pudo leer la imagen.','error');
+    img.src=reader.result;
+  };
+  reader.onerror=()=>toast('No se pudo leer el archivo.','error');
+  reader.readAsDataURL(file);
+}
+
+/* Autoformato de texto: primera letra mayúscula, resto minúscula (y por palabra para nombres) */
+function toSentenceCase(s){ s=s||''; return s.length? s.charAt(0).toUpperCase()+s.slice(1).toLowerCase() : s; }
+function toTitleCase(s){ s=s||''; return s.toLowerCase().replace(/(^|[\s.-])([a-zà-öø-ÿñ])/g,(m,p1,p2)=>p1+p2.toUpperCase()); }
+function autoCap(el,mode){
+  if(!el) return;
+  const pos=el.selectionStart, val=el.value;
+  const out = mode==='title' ? toTitleCase(val) : toSentenceCase(val);
+  if(out!==val){ el.value=out; if(pos!=null) el.setSelectionRange(pos,pos); }
+}
+function bindCostosForm2(){
+  const e1=$('#cfEmpresa'); if(e1) e1.addEventListener('input',()=>autoCap(e1,'title'));
+  const e2=$('#cfContacto'); if(e2) e2.addEventListener('input',()=>autoCap(e2,'title'));
+  const e3=$('#cfDireccion'); if(e3) e3.addEventListener('input',()=>autoCap(e3,'title'));
+  const e4=$('#cfMail'); if(e4) e4.addEventListener('input',()=>autoLower(e4));
+  const e5=$('#cfRut'); if(e5) e5.addEventListener('input',()=>autoRut(e5));
+  const e6=$('#cfTelefono'); if(e6) e6.addEventListener('input',()=>autoTelefono(e6));
+  const e7=$('#cfTelefono2'); if(e7) e7.addEventListener('input',()=>autoTelefono(e7));
+  const e8=$('#cfComuna'); if(e8) e8.addEventListener('input',()=>autoCap(e8,'title'));
+  bindDraftClienteInputs2();
+}
+/* Mantiene "draftCliente2" al día con lo que se va escribiendo en el formulario de "nueva
+   cotización", campo por campo. Sin esto, un redibujo en segundo plano (la sincronización
+   con la nube cada 20s) reconstruye el formulario con los valores VIEJOS de draftCliente2
+   (vacíos, si recién se estaba empezando a llenar) y borra lo que el usuario llevaba
+   tipeado — que es justo el bug que se está arreglando acá. */
+function bindDraftClienteInputs2(){
+  const campos=['cfId','cfFecha','cfEmpresa','cfRut','cfContacto','cfMail','cfTelefono','cfTelefono2','cfDireccion','cfComuna'];
+  const propiedad={ cfId:'id', cfFecha:'fecha', cfEmpresa:'empresa', cfRut:'rut', cfContacto:'contacto',
+    cfMail:'mail', cfTelefono:'telefono', cfTelefono2:'telefono2', cfDireccion:'direccion', cfComuna:'comuna' };
+  campos.forEach(id=>{
+    const el=$('#'+id); if(!el) return;
+    el.addEventListener('input',()=>{ if(!draftCliente2) return; draftCliente2[propiedad[id]]=el.value; draftClienteSucio2=true; });
+  });
+  const region=$('#cfRegion');
+  if(region) region.addEventListener('change',()=>{ if(!draftCliente2) return; draftCliente2.region=region.value; draftClienteSucio2=true; });
+}
+function autoLower(el){
+  const pos=el.selectionStart, val=el.value, out=val.toLowerCase();
+  if(out!==val){ el.value=out; if(pos!=null) el.setSelectionRange(pos,pos); }
+}
+/* Antepone siempre un "+" al teléfono (ej: 56992542227 -> +56992542227) */
+function formatTelefono(raw){
+  let v=(raw||'').trim();
+  if(!v) return '';
+  v='+'+v.replace(/\+/g,'');
+  return v;
+}
+function autoTelefono(el){
+  const pos=el.selectionStart, val=el.value, out=formatTelefono(val);
+  if(out!==val){ el.value=out; const nuevaPos=(pos!=null)?pos+(out.length-val.length):out.length; el.setSelectionRange(Math.max(nuevaPos,1),Math.max(nuevaPos,1)); }
+}
+/* Formatea RUT chileno con puntos de miles y guion: 777527959 -> 77.752.795-9 */
+function formatRut(raw){
+  let v=(raw||'').replace(/[^0-9kK]/g,'').toUpperCase();
+  if(!v) return '';
+  const dv=v.slice(-1), body=v.slice(0,-1);
+  if(!body) return dv;
+  return body.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+'-'+dv;
+}
+function autoRut(el){
+  const val=el.value, out=formatRut(val);
+  if(out!==val){ el.value=out; el.setSelectionRange(out.length,out.length); }
+}
+
+const KEY_COSTOS2='taller_gary_costos2_v1';
+function seedCostos2(){
+  // Cotización de ejemplo reconstruida desde COSTOS_BISTRECH - GUARNICION MILITAR DE SANTIAGO (real, corregida)
+  function itemSeed(alto,ancho,cantidad,tipo,telaCosto,creaActiva,margenPct,armadoCosto){
+    const altoS=alto.toFixed(2).replace('.',','), anchoS=ancho.toFixed(2).replace('.',',');
+    return {medida:anchoS+' x '+altoS+' m', alto:altoS, ancho:anchoS, tipoProducto:'Bandera', cantidad,tipo,tipoTela:'Bistrech',telaCosto,creaActiva,creaCosto:telaCosto,
+      tipoVaina:'Vaina de Lona', tipoAcabado:'Confección', armadoCosto, margenPct};
+  }
+  // Armado/Cortado/Festoneado/Limpieza-Embolsado/Sublimado ya NO van como líneas manuales: los calcula la sección "Confección"
+  // (Armado fijado al valor histórico de este ejemplo; Cortado/Festoneado/Limpieza/Sublimado quedan en su valor por defecto)
+  // Flete y Costo Finan/Impos/Imprevisto quedan en su % por defecto (10% y 6%) definido en calcularOtros2().
+  const items=[
+    itemSeed(9,13,2,'Chilena',700,true, 0.20, 60000),
+    itemSeed(6,4,1,'Ejército',730,false, 0.20, 15000),
+    itemSeed(2,3,2,'Ejército',730,false, 0.20, 4500),
+    itemSeed(6,4,16,'Chilena',730,true, 0.20, 15000),
+    itemSeed(2,3,6,'Chilena',730,true, 0.20, 4500),
+    itemSeed(1.2,0.8,5,'Gallardetes',730,true, 0.20, 2500),
+  ];
+  const total = items.reduce((s,it)=>s+calcularItem2(it).totalConIva,0);
+  return {
+    seq:1,
+    cotizaciones:[{
+      id:'3375-49-COT26', fecha:'2026-07-21', estado:'Pendiente',
+      empresa:'Guarnición de Santiago', rut:'',
+      contacto:'', mail:'', telefono:'', direccion:'',
+      items, total,
+    }],
+  };
+}
+function loadCostos2(){
+  try{ const raw=localStorage.getItem(KEY_COSTOS2); if(raw) return JSON.parse(raw); }catch(e){ console.error(e); }
+  return seedCostos2();
+}
+function costosGuardarLocal2(){
+  try{ localStorage.setItem(KEY_COSTOS2, JSON.stringify(COSTOS2)); }
+  catch(e){ console.warn('No se pudo guardar copia local de Costos (sin espacio) — sigue guardando en la nube igual.', e); }
+}
+function saveCostos2(){
+  costosGuardarLocal2();
+}
+let COSTOS2 = loadCostos2();
+
+
+/* ---------- Avisos y confirmaciones propios (confirm()/alert() nativos no funcionan en el sandbox del Artifact) ---------- */
+function toast(msg, tipo){
+  let box=document.getElementById('toastBox');
+  if(!box){ box=document.createElement('div'); box.id='toastBox'; document.body.appendChild(box); }
+  const t=document.createElement('div');
+  t.className='toast'+(tipo==='error'?' err':'');
+  t.textContent=msg;
+  box.appendChild(t);
+  setTimeout(()=>{ t.classList.add('out'); setTimeout(()=>t.remove(),300); }, 2800);
+}
+function confirmDialog(msg, onOk, labelOk){
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box">
+    <p>${esc(msg)}</p>
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button class="btn ghost sm" id="cfCancel">Cancelar</button>
+      <button class="btn danger sm" id="cfOk">${esc(labelOk||'Confirmar')}</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  bg.querySelector('#cfCancel').onclick=()=>bg.remove();
+  bg.querySelector('#cfOk').onclick=()=>{ bg.remove(); onOk(); };
+  bg.addEventListener('click',e=>{ if(e.target===bg) bg.remove(); });
+}
+/* ---------- Aviso de cambios sin guardar al salir de una cotización ---------- */
+let cotizacionSucia2=false;
+function marcarSucia2(){ cotizacionSucia2=true; }
+/* Mismo mecanismo que "cotizacionSucia2", pero para el formulario de "Datos del cliente —
+   nueva cotización": mientras se está escribiendo ahí, un refresco automático en segundo
+   plano (la sincronización con la nube, cada 20s) no debe redibujar la página y borrar lo
+   que se llevaba tipeado. */
+let draftClienteSucio2=false;
+function backupCostos2(){
+  const blob=new Blob([JSON.stringify(COSTOS2,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='taller_gary_cotizaciones_'+todayISO()+'.json'; a.click();
+}
+function restoreCostosFile2(input){
+  const f=input.files[0]; if(!f) return; const r=new FileReader();
+  r.onload=()=>{ try{ const data=JSON.parse(r.result);
+      confirmDialog('¿Reemplazar todas las cotizaciones actuales por las del respaldo?', ()=>{
+        COSTOS2={seq:data.seq||1, cotizaciones:data.cotizaciones||[]};
+        saveCostos2(); render(); toast('Respaldo restaurado.');
+      });
+    }catch(e){ toast('Archivo inválido.','error'); } };
+  r.readAsText(f); input.value='';
+}
+
+let draftCliente2=null;
+let draftEditOrig2=null; // id original mientras se edita una cotización existente (null = es nueva)
+let costosView2='lista'; // 'lista' | 'detalle'
+let detalleCotId2=null;
+function money(n){ n=Math.round(+n||0); const s=Math.abs(n).toLocaleString('es-CL'); return (n<0?'-$':'$')+s; }
+/* Porcentaje limpio para inputs: 10 en vez de 10.0, pero conserva decimales reales (ej: 12.5) */
+function formatPct(frac){ return +((+frac||0)*100).toFixed(2); }
+function margenActivo(it, p){ return Math.abs((+it.margenPct||0)-p)<0.0001; }
+function margenEsEscenario(it){ return MARGEN_ESCENARIOS.some(p=>margenActivo(it,p)); }
+/* Marca en rojo el input y su fila cuando el costo no se encontró en el mantenedor (para que no se pase). */
+function toggleWarnFila(input, isWarn){
+  if(!input) return;
+  input.classList.toggle('warn', !!isWarn);
+  const row = input.closest ? input.closest('.confeccion-row') : null;
+  if(row) row.classList.toggle('warn', !!isWarn);
+}
+function abrirDetalleCotizacion2(id){ detalleCotId2=id; costosView2='detalle'; cotizacionSucia2=false; render(); window.scrollTo(0,0); }
+function cerrarDetalleCotizacion2(){
+  advertirSalidaSiSucia(()=>{ costosView2='lista'; detalleCotId2=null; render(); window.scrollTo(0,0); });
+}
+function nuevoDraftCliente2(){
+  draftCliente2 = { id:'', fecha:todayISO(), estado:'Pendiente', empresa:'', rut:'', contacto:'', mail:'', telefono:'', telefono2:'', direccion:'', comuna:'', region:'' };
+  draftEditOrig2 = null;
+  draftClienteSucio2 = false;
+}
+
+function estadoBadge(estado){
+  const cls = estado==='Aceptada'?'b-acept':estado==='Rechazada'?'b-rech':'b-pend';
+  return `<span class="badge ${cls}">${esc(estado)}</span>`;
+}
+function tablaCotizaciones2(rows, vacio){
+  if(!rows.length) return `<div class="muted">${vacio}</div>`;
+  return `<div style="overflow-x:auto"><table style="min-width:900px"><thead><tr><th>ID</th><th>Fecha</th><th>Cliente/Empresa</th><th>RUT</th><th>Contacto</th>
+    <th>Teléfono</th><th>Mail</th><th class="num">Total</th><th>Estado</th><th></th></tr></thead><tbody>
+    ${rows.map(c=>`<tr style="cursor:pointer" onclick="abrirDetalleCotizacion2('${c.id}')" title="Click para trabajar la cotización">
+      <td><b>${esc(c.id)}</b></td><td>${fmtDateCL(c.fecha)}</td><td>${esc(c.empresa)}</td><td class="muted">${esc(c.rut)}</td>
+      <td class="muted">${esc(c.contacto)}</td><td class="muted">${esc(c.telefono)}${c.telefono2?' / '+esc(c.telefono2):''}</td><td class="muted">${esc(c.mail)}</td>
+      <td class="num">${c.total?money(c.total):'<span class="muted">—</span>'}</td>
+      <td>${estadoBadge(c.estado||'Pendiente')}</td>
+      <td class="right" style="white-space:nowrap">
+        ${(c.estado||'Pendiente')==='Pendiente'?`
+          <button class="btn ok sm" onclick="event.stopPropagation();cambiarEstadoCotizacion2('${c.id}','Aceptada')">✔ Aceptar</button>
+          <button class="btn danger sm" onclick="event.stopPropagation();cambiarEstadoCotizacion2('${c.id}','Rechazada')">✕ Rechazar</button>`
+        : `<button class="btn ghost sm" onclick="event.stopPropagation();cambiarEstadoCotizacion2('${c.id}','Pendiente')">↺ Volver a pendiente</button>`}
+        <button class="btn ghost sm" onclick="event.stopPropagation();editarCotizacionCliente2('${c.id}')">Editar</button>
+        <button class="btn ghost sm" onclick="event.stopPropagation();eliminarCotizacionCliente2('${c.id}')">Eliminar</button>
+      </td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+function renderCostos2(m){
+  if(costosView2==='detalle' && detalleCotId2){
+    const c=COSTOS2.cotizaciones.find(x=>x.id===detalleCotId2);
+    if(c) return renderDetalleCotizacion2(c);
+    costosView2='lista'; detalleCotId2=null;
+  }
+  if(!draftCliente2) nuevoDraftCliente2();
+  const editando = !!draftEditOrig2;
+  const all=[...COSTOS2.cotizaciones].sort((a,b)=>b.id.localeCompare(a.id));
+  const pendientes=all.filter(c=>(c.estado||'Pendiente')==='Pendiente');
+  const aceptadas=all.filter(c=>c.estado==='Aceptada');
+  const rechazadas=all.filter(c=>c.estado==='Rechazada');
+  return `
+    <div class="backlink" onclick="go('inicio')">← Volver al inicio</div>
+    <div class="page-head">
+      <div class="icon">${m.icon}</div>
+      <div><h1>${m.title}</h1>
+        <div class="sub">${m.desc}</div>
+        <span class="pill" style="background:#eef2f7;color:#57606a" title="Este es un módulo de pruebas: los datos quedan solo en este navegador, no se sincronizan con la nube todavía.">🧪 Borrador local (sin nube)</span>
+        ${m.conn?`<div class="conn">${m.conn}</div>`:''}
+      </div>
+      <span class="grow"></span>
+      <div class="row" style="align-self:flex-start">
+        <button class="btn ghost sm" onclick="backupCostos2()">⭳ Respaldo</button>
+        <button class="btn ghost sm" onclick="document.getElementById('cotRestoreFile').click()">⭱ Restaurar</button>
+        <input type="file" id="cotRestoreFile" accept=".json" style="display:none" onchange="restoreCostosFile2(this)">
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>${editando?'Editando cotización '+esc(draftEditOrig2):'Datos del cliente — nueva cotización'}</h2>
+      <div class="grid2">
+        <div class="field"><label>ID cotización</label><input id="cfId" value="${esc(draftCliente2.id)}" placeholder="Ej: COT-2026-001"></div>
+        <div class="field"><label>Fecha</label><input type="date" id="cfFecha" value="${draftCliente2.fecha}"></div>
+      </div>
+      ${editando?`<div class="row" style="margin-bottom:10px">Estado actual: ${estadoBadge(draftCliente2.estado||'Pendiente')} <span class="muted" style="font-size:12px">(se cambia con los botones de la tabla, no aquí)</span></div>`:''}
+      <div class="grid2">
+        <div class="field"><label>Nombre Cliente/Empresa</label><input id="cfEmpresa" value="${esc(draftCliente2.empresa)}" placeholder="Institución / empresa"></div>
+        <div class="field"><label>RUT Cliente/Empresa</label><input id="cfRut" value="${esc(draftCliente2.rut)}" placeholder="12.345.678-9"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Nombre contacto</label><input id="cfContacto" value="${esc(draftCliente2.contacto)}" placeholder="Persona de contacto"></div>
+        <div class="field"><label>Mail contacto</label><input type="email" id="cfMail" value="${esc(draftCliente2.mail)}" placeholder="correo@ejemplo.cl"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Teléfono</label><input id="cfTelefono" value="${esc(draftCliente2.telefono)}" placeholder="+56 9 ..."></div>
+        <div class="field"><label>Teléfono 2 <span class="muted" style="font-weight:400">(opcional, otro contacto)</span></label><input id="cfTelefono2" value="${esc(draftCliente2.telefono2||'')}" placeholder="+56 9 ..."></div>
+      </div>
+      <div class="field"><label>Dirección</label><input id="cfDireccion" value="${esc(draftCliente2.direccion)}" placeholder="Dirección de despacho / facturación"></div>
+      <div class="grid2">
+        <div class="field"><label>Comuna</label><input id="cfComuna" value="${esc(draftCliente2.comuna||'')}" placeholder="Ej: Coronel"></div>
+        <div class="field"><label>Región</label><select id="cfRegion">
+          <option value="">Selecciona...</option>
+          ${REGIONES_CHILE.map(r=>`<option ${draftCliente2.region===r?'selected':''}>${r}</option>`).join('')}
+        </select></div>
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:6px">
+        ${editando?`<button class="btn ghost sm" onclick="nuevoDraftCliente2();render()">Cancelar edición</button>`:''}
+        <button class="btn sm" onclick="guardarCotizacionCliente2()">${editando?'Guardar cambios':'Guardar y crear cotización'}</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>🟡 Cotizaciones pendientes (${pendientes.length})</h2>
+      <div class="muted" style="margin:-6px 0 12px;font-size:12px">Ya se enviaron al cliente, esperando respuesta.</div>
+      ${tablaCotizaciones2(pendientes, 'No hay cotizaciones pendientes.')}
+    </div>
+    <div class="panel">
+      <h2>🟢 Cotizaciones aceptadas (${aceptadas.length})</h2>
+      <div class="muted" style="margin:-6px 0 12px;font-size:12px">El cliente aceptó y generó una Orden de Compra.</div>
+      ${tablaCotizaciones2(aceptadas, 'Aún no hay cotizaciones aceptadas.')}
+    </div>
+    <div class="panel">
+      <h2>🔴 Cotizaciones rechazadas (${rechazadas.length})</h2>
+      <div class="muted" style="margin:-6px 0 12px;font-size:12px">No prosperaron; quedan en el historial.</div>
+      ${tablaCotizaciones2(rechazadas, 'No hay cotizaciones rechazadas.')}
+    </div>`;
+}
+
+function cambiarEstadoCotizacion2(id, estado){
+  const c=COSTOS2.cotizaciones.find(x=>x.id===id); if(!c) return;
+  c.estado=estado; saveCostos2(); render();
+}
+
+/* ---------- Detalle de cotización: productos / ítems ---------- */
+/* ---------- Motor de costeo por ítem (materiales/procesos + flete + financiero/imprevisto + margen + IVA) ---------- */
+function itemNuevo2(){
+  return {
+    medida:'', cantidad:1, tipo:'', tipoProducto:'Bandera', foto:'',
+    alto:'', ancho:'', tipoTela:'Bistrech', telaCosto:730,
+    numEstrellas:1, creaCosto:730,
+    tipoVaina:'Vaina de Lona', huinchaCosto:250, argollaCosto:200, argollaExtra:0,
+    tipoAcabado:'Confección', armadoCosto:null, cortadoCosto:null, estrellaCosto:null, limpiezaCosto:null, sublimadoCosto:null,
+    fletePct:0.15, finImpPct:0.10, margenPct:0.20,
+  };
+}
+/* Números en formato chileno: coma decimal (13,00 = 13 metros; 0,90 = 90 cm) */
+function parseNumCL(val){
+  if(val==null||val==='') return 0;
+  if(typeof val==='number') return val;
+  let s=String(val).trim();
+  if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.'); // "1.234,50" -> "1234.50"
+  const n=parseFloat(s); return isNaN(n)?0:n;
+}
+function formatNumCL(n, decimals){
+  decimals = decimals==null?2:decimals;
+  return (+n||0).toLocaleString('es-CL',{minimumFractionDigits:decimals,maximumFractionDigits:decimals});
+}
+/* Montos en pesos con puntos de miles, editables como texto: 85000 <-> "85.000" */
+function formatMiles(n){ return Math.round(+n||0).toLocaleString('es-CL'); }
+function parseMiles(str){ if(str==null) return 0; const n=parseInt(String(str).replace(/[^0-9-]/g,''),10); return isNaN(n)?0:n; }
+/* Cantidad de tela: (Alto × Ancho / 1,4) × 1,2  ·  Crea (si aplica): tela / 12.
+   La columna "Cantidad" se muestra redondeada a 1 decimal, pero el monto en $ siempre
+   se calcula con el valor exacto (con todos los decimales), para no perder precisión en el costeo. */
+function redondear1(n){ return Math.round((+n||0)*10)/10; }
+function redondear4(n){ return Math.round((+n||0)*10000)/10000; }
+function calcularTela2(it){
+  const alto=parseNumCL(it.alto), ancho=parseNumCL(it.ancho);
+  const telaCantExacta = (alto&&ancho) ? ((alto*ancho)/1.4)*1.2 : 0;
+  const telaCant = redondear1(telaCantExacta);
+  const telaCosto = it.telaCosto!=null && it.telaCosto!=='' ? +it.telaCosto : 730;
+  const telaSubtotal = telaCantExacta*telaCosto;
+  const creaActiva = it.tipoAcabado==='Estrella';
+  const numEstrellas = it.numEstrellas!=null && it.numEstrellas!=='' ? +it.numEstrellas : 1;
+  const creaCantDefault = creaActiva ? redondear4((telaCantExacta/12)*numEstrellas) : 0;
+  const creaCantExacta = creaActiva ? (it.creaCant!=null && it.creaCant!=='' ? +it.creaCant : creaCantDefault) : 0;
+  const creaCant = creaCantExacta;
+  const creaCosto = it.creaCosto!=null && it.creaCosto!=='' ? +it.creaCosto : 730;
+  const creaSubtotal = creaCantExacta*creaCosto;
+  return {telaCant,telaCantExacta,telaCosto,telaSubtotal,creaActiva,numEstrellas,creaCantDefault,creaCant,creaCantExacta,creaCosto,creaSubtotal};
+}
+function fmtNum(n){ n=+n||0; return (Math.round(n*10000)/10000).toLocaleString('es-CL',{maximumFractionDigits:4}); }
+/* Accesorios: Huincha de poliéster = Alto×2 + 0,10 m (10 cm) (solo si vaina = Huincha de poliéster)
+   Argollas = tabla por medida (mantenedor) + extra editable, ambos solo aplican con Huincha de poliéster */
+function calcularAccesorios2(it, telaCalc){
+  const esHuincha = it.tipoVaina==='Huincha de poliéster';
+  const alto=parseNumCL(it.alto), ancho=parseNumCL(it.ancho);
+  const huinchaCantExacta = esHuincha ? (alto*2+0.10) : 0;
+  const huinchaCant = redondear1(huinchaCantExacta);
+  const huinchaCosto = it.huinchaCosto!=null && it.huinchaCosto!=='' ? +it.huinchaCosto : 250;
+  const huinchaSubtotal = huinchaCantExacta*huinchaCosto;
+  const argollasBase = esHuincha ? argollasPorMedida2(ancho,alto) : 0;
+  const argollaExtra = +it.argollaExtra||0;
+  const argollasCant = argollasBase+argollaExtra;
+  const argollaCosto = it.argollaCosto!=null && it.argollaCosto!=='' ? +it.argollaCosto : 200;
+  const argollaSubtotal = argollasCant*argollaCosto;
+  const subtotalAccesorios = huinchaSubtotal+argollaSubtotal;
+  return {esHuincha,huinchaCant,huinchaCantExacta,huinchaCosto,huinchaSubtotal,argollasBase,argollaExtra,argollasCant,argollaCosto,argollaSubtotal,subtotalAccesorios};
+}
+/* Confección:
+   - Armado = tarifado por medida (basta que coincida el Largo). Si no hay ninguna coincidencia, queda en $0 editable.
+   - Cortado = tarifado por medida (mismo criterio), tabla propia.
+   - Festoneado = tarifado por medida (mismo criterio), tabla "Estrella" internamente. Siempre aplica;
+     si Especificación="Aplicado", su costo por defecto es el mismo que el de Armado (no el tarifado).
+   - Limpieza/Embolsado = % del Armado (por defecto 10%). Se recalcula solo apenas cambia el Armado.
+   - Sublimado = monto fijo editable (por defecto $2.200). No aplica (queda en $0) si Especificación="Estrella".
+   Todos los montos quedan editables en pesos por ítem, igual que Telas/Accesorios. */
+function calcularConfeccion2(it){
+  const ancho=parseNumCL(it.ancho), alto=parseNumCL(it.alto);
+  const armadoDefault = armadoPorMedida2(ancho,alto);
+  const armadoCosto = it.armadoCosto!=null && it.armadoCosto!=='' ? +it.armadoCosto : armadoDefault;
+  const armadoSubtotal = armadoCosto;
+
+  const cortadoDefault = cortadoPorMedida2(ancho,alto);
+  const cortadoCosto = it.cortadoCosto!=null && it.cortadoCosto!=='' ? +it.cortadoCosto : cortadoDefault;
+  const cortadoSubtotal = cortadoCosto;
+
+  const festoneadoAplica = true;
+  const estrellaDefault = it.tipoAcabado==='Aplicado' ? armadoCosto : estrellaPorMedida2(ancho,alto);
+  const estrellaCosto = it.estrellaCosto!=null && it.estrellaCosto!=='' ? +it.estrellaCosto : estrellaDefault;
+  const estrellaSubtotal = estrellaCosto;
+
+  const limpiezaDefault = armadoCosto*CONFECCION_PCT2.limpieza;
+  const limpiezaCosto = it.limpiezaCosto!=null && it.limpiezaCosto!=='' ? +it.limpiezaCosto : limpiezaDefault;
+  const limpiezaSubtotal = limpiezaCosto;
+
+  const sublimadoAplica = it.tipoAcabado!=='Estrella';
+  const sublimadoDefault = 2200;
+  const sublimadoCosto = it.sublimadoCosto!=null && it.sublimadoCosto!=='' ? +it.sublimadoCosto : sublimadoDefault;
+  const sublimadoSubtotal = sublimadoAplica ? sublimadoCosto : 0;
+
+  const subtotalConfeccion = armadoSubtotal+cortadoSubtotal+estrellaSubtotal+limpiezaSubtotal+sublimadoSubtotal;
+  return {armadoDefault,armadoCosto,armadoSubtotal,cortadoDefault,cortadoCosto,cortadoSubtotal,
+    festoneadoAplica,estrellaDefault,estrellaCosto,estrellaSubtotal,
+    limpiezaCosto,limpiezaSubtotal,
+    sublimadoAplica,sublimadoCosto,sublimadoSubtotal,
+    subtotalConfeccion};
+}
+/* Otros: Flete = % de todos los costos anteriores (Telas+Accesorios+Confección+líneas).
+   Costo Finan/Impos/Imprevisto = % de esos mismos costos anteriores, SIN considerar el Flete. */
+function calcularOtros2(it, baseCostos){
+  const fletePct = it.fletePct!=null && it.fletePct!=='' ? +it.fletePct : 0.15;
+  const flete = baseCostos*fletePct;
+  const finImpPct = it.finImpPct!=null && it.finImpPct!=='' ? +it.finImpPct : 0.10;
+  const finImp = baseCostos*finImpPct;
+  const subtotalOtros = flete+finImp;
+  return {fletePct,flete,finImpPct,finImp,subtotalOtros};
+}
+function calcularItem2(it){
+  const t = calcularTela2(it);
+  const a = calcularAccesorios2(it, t);
+  const c = calcularConfeccion2(it);
+  const subtotalA = t.telaSubtotal + t.creaSubtotal + a.subtotalAccesorios + c.subtotalConfeccion;
+  const o = calcularOtros2(it, subtotalA);
+  const subtotalB = o.subtotalOtros;
+  const totalCosto = subtotalA+subtotalB;
+  const margenMonto = totalCosto*(+it.margenPct||0);
+  const precioUnitNeto = totalCosto+margenMonto;
+  const cantidad = +it.cantidad||0;
+  const totalNeto = precioUnitNeto*cantidad;
+  const iva = totalNeto*IVA_PCT;
+  const totalConIva = totalNeto+iva;
+  return {...t,...a,...c,...o,subtotalA,subtotalB,totalCosto,margenMonto,precioUnitNeto,totalNeto,iva,totalConIva};
+}
+function headerBlockHTML2(it, i){
+  const resumen = [it.tipo, it.ancho&&it.alto? `${it.ancho}×${it.alto}`:''].filter(Boolean).join(' · ');
+  return `<div class="item-card-head" data-idx="${i}">
+      <div class="item-card-head-mini">${it.foto?`<img src="${esc(it.foto)}">`:''}</div>
+      <h2 title="${esc('Ítem '+(i+1)+(resumen?' — '+resumen:''))}">Ítem ${i+1}${resumen?' — '+esc(resumen):''}</h2>
+      <button class="btn danger sm del-item" title="Eliminar ítem">✕ Eliminar ítem</button>
+    </div>`;
+}
+function itemCardHTML2(it, i){
+  const r = calcularItem2(it);
+  return `<div class="panel item-card" data-idx="${i}">
+    <div class="item-body">
+    <div class="grid-tipo">
+      <div class="field"><label>Tipo de producto</label>
+        <select class="ci-tipoproducto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Ancho (m)</label><input class="ci-ancho" type="text" inputmode="decimal" value="${it.ancho?esc(it.ancho):''}" placeholder="Ej: 3,00"></div>
+      <div class="field"><label>Alto (m)</label><input class="ci-alto" type="text" inputmode="decimal" value="${it.alto?esc(it.alto):''}" placeholder="Ej: 2,00"></div>
+    </div>
+    <div class="grid-cant">
+      <div class="field"><label>Cantidad</label><input class="ci-cant" type="number" min="0" step="1" value="${it.cantidad}"></div>
+      <div class="field"><label>Nombre de bandera</label><input class="ci-tipo" value="${esc(it.tipo)}" placeholder="Chilena / Institucional / Ejército..."></div>
+    </div>
+
+    <label>Tela</label>
+    <div class="grid4">
+      <div class="field"><label>Tipo de tela</label><input class="ci-tipotela" value="${esc(it.tipoTela||'Bistrech')}" placeholder="Bistrech"></div>
+      <div class="field"><label>Tipo de vaina</label><select class="ci-tipovaina">${TIPOS_VAINA.map(tv=>`<option ${((it.tipoVaina||'Vaina de Lona')===tv)?'selected':''}>${tv}</option>`).join('')}</select></div>
+      <div class="field"><label>Especificación</label><select class="ci-tipoacabado">${TIPOS_ACABADO.map(ta=>`<option ${((it.tipoAcabado||'Confección')===ta)?'selected':''}>${ta}</option>`).join('')}</select></div>
+      <div class="field"><label>Cantidad de Estrellas</label><input class="ci-numestrellas" type="number" min="0" step="1" value="${r.numEstrellas}" ${r.creaActiva?'':'disabled'}></div>
+    </div>
+
+    <label>Foto de la bandera</label>
+    <div class="foto-box">
+      <div class="foto-preview" tabindex="0" title="Haz clic aquí y pega (Cmd+V) una imagen copiada">${it.foto?`<img src="${esc(it.foto)}">`:`<div class="foto-empty">Sin foto<br>(arrastra o pega aquí)</div>`}</div>
+      <div class="foto-actions">
+        <button class="btn ghost sm foto-subir" type="button">📤 Subir foto</button>
+        <input type="file" accept="image/*" class="foto-file" style="display:none">
+        <button class="btn ghost sm foto-buscar" type="button">🔍 Buscar en galería</button>
+        ${it.foto?`<button class="btn ghost sm foto-quitar" type="button">✕ Quitar</button>`:''}
+      </div>
+    </div>
+    <input type="hidden" class="ci-foto" value="${esc(it.foto||'')}">
+
+    <div class="row between" style="margin:0">
+      <div class="section-title" style="margin:16px 0 8px">Telas</div>
+    </div>
+    <div class="tela-costeo-head"><div>Concepto</div><div>Cantidad</div><div>Costo unit.</div><div class="right">Total</div></div>
+    <div class="tela-costeo-row">
+      <div>Tela</div>
+      <div><span class="tela-cant">${formatNumCL(r.telaCant,1)}</span> <span class="unidad">m</span></div>
+      <input class="ci-telacosto" type="number" step="1" value="${r.telaCosto}">
+      <div class="tela-subtotal right">${money(r.telaSubtotal)}</div>
+    </div>
+    <div class="tela-costeo-row">
+      <div>Estrella ${r.creaActiva?'':'<span class="muted">(no aplica: no es Estrella)</span>'}</div>
+      <div class="argolla-cant-cell"><input class="ci-creacant" type="number" min="0" step="0.1" value="${r.creaCant}" ${r.creaActiva?'':'disabled'}> <span class="unidad">m</span></div>
+      <input class="ci-creacosto" type="number" step="1" value="${r.creaCosto}" ${r.creaActiva?'':'disabled'}>
+      <div class="crea-subtotal right">${money(r.creaSubtotal)}</div>
+    </div>
+    <div class="tela-costeo-row subtotal">
+      <div>Subtotal telas</div><div></div><div></div>
+      <div class="subtotal-telas right">${money(r.telaSubtotal+r.creaSubtotal)}</div>
+    </div>
+
+    <div class="row between" style="margin-top:6px">
+      <div class="section-title" style="margin:16px 0 8px">Accesorios</div>
+      <a href="#" class="tag" onclick="abrirMantenedorArgollas2();return false">⚙️ Editar tabla de argollas</a>
+    </div>
+    <div class="tela-costeo-head"><div>Concepto</div><div>Cantidad</div><div>Costo unit.</div><div class="right">Total</div></div>
+    <div class="tela-costeo-row">
+      <div>Huincha de poliéster ${r.esHuincha?'':'<span class="muted">(no aplica: vaina de lona)</span>'}</div>
+      <div><span class="huincha-cant">${formatNumCL(r.huinchaCant,1)}</span> <span class="unidad">m</span></div>
+      <input class="ci-huinchacosto" type="number" step="1" value="${r.huinchaCosto}">
+      <div class="huincha-subtotal right">${money(r.huinchaSubtotal)}</div>
+    </div>
+    <div class="tela-costeo-row">
+      <div>Argollas ${r.esHuincha?'':'<span class="muted">(no aplica)</span>'}</div>
+      <div class="argolla-cant-cell">
+        <span class="argollas-base">${r.argollasBase}</span><span class="muted">+</span>
+        <input class="ci-argollaextra" type="number" step="1" value="${it.argollaExtra||0}" title="Argolla extra (puede ser negativa para restar)"> <span class="unidad">un.</span>
+      </div>
+      <input class="ci-argollacosto" type="number" step="1" value="${r.argollaCosto}">
+      <div class="argolla-subtotal right">${money(r.argollaSubtotal)}</div>
+    </div>
+    <div class="tela-costeo-row subtotal">
+      <div>Subtotal accesorios</div><div></div><div></div>
+      <div class="subtotal-accesorios right">${money(r.subtotalAccesorios)}</div>
+    </div>
+
+    <div class="row between" style="margin-top:6px">
+      <div class="section-title" style="margin:16px 0 8px">Confección</div>
+      <div class="row" style="gap:6px">
+        <a href="#" class="tag" onclick="abrirMantenedorConfeccionPct2();return false">⚙️ % confección</a>
+        <a href="#" class="tag" onclick="abrirMantenedorArmado2();return false">⚙️ Armado</a>
+        <a href="#" class="tag" onclick="abrirMantenedorCortado2();return false">⚙️ Cortado</a>
+        <a href="#" class="tag" onclick="abrirMantenedorEstrella2();return false">⚙️ Festoneado</a>
+      </div>
+    </div>
+    <div class="confeccion-head"><div>Concepto</div><div></div><div>Costo</div><div class="right">Total</div></div>
+    <div class="confeccion-row ${r.armadoCosto===0?'warn':''}">
+      <div>Armado ${r.armadoCosto===0?'<span class="warn-tag">⚠ sin dato en mantenedor</span>':''}</div>
+      <div></div>
+      <input class="ci-armadocosto ${r.armadoCosto===0?'warn':''}" type="text" inputmode="numeric" value="${formatMiles(r.armadoCosto)}">
+      <div class="armado-subtotal right">${money(r.armadoSubtotal)}</div>
+    </div>
+    <div class="confeccion-row ${r.cortadoCosto===0?'warn':''}">
+      <div>Cortado ${r.cortadoCosto===0?'<span class="warn-tag">⚠ sin dato en mantenedor</span>':''}</div>
+      <div></div>
+      <input class="ci-cortadocosto ${r.cortadoCosto===0?'warn':''}" type="text" inputmode="numeric" value="${formatMiles(r.cortadoCosto)}">
+      <div class="cortado-subtotal right">${money(r.cortadoSubtotal)}</div>
+    </div>
+    <div class="confeccion-row ${r.estrellaCosto===0?'warn':''}">
+      <div>Festoneado ${r.estrellaCosto===0?'<span class="warn-tag">⚠ sin dato en mantenedor</span>':''}</div>
+      <div></div>
+      <input class="ci-estrellacosto ${r.estrellaCosto===0?'warn':''}" type="text" inputmode="numeric" value="${formatMiles(r.estrellaCosto)}">
+      <div class="estrella-subtotal right">${money(r.estrellaSubtotal)}</div>
+    </div>
+    <div class="confeccion-row">
+      <div>Limpieza/Embolsado <span class="muted" style="font-size:11px">(% Armado)</span></div>
+      <div></div>
+      <input class="ci-limpiezacosto" type="text" inputmode="numeric" value="${formatMiles(r.limpiezaCosto)}">
+      <div class="limpieza-subtotal right">${money(r.limpiezaSubtotal)}</div>
+    </div>
+    <div class="confeccion-row">
+      <div>Sublimado ${r.sublimadoAplica?'':'<span class="muted">(no aplica: Estrella)</span>'}</div>
+      <div></div>
+      <input class="ci-sublimadocosto" type="text" inputmode="numeric" value="${formatMiles(r.sublimadoCosto)}" ${r.sublimadoAplica?'':'disabled'}>
+      <div class="sublimado-subtotal right">${money(r.sublimadoSubtotal)}</div>
+    </div>
+    <div class="confeccion-row subtotal">
+      <div>Subtotal confección</div><div></div><div></div>
+      <div class="subtotal-confeccion right">${money(r.subtotalConfeccion)}</div>
+    </div>
+
+    <div class="cost-summary">
+      <div class="cs-row"><span>Subtotal A (materiales/procesos)</span><b class="cs-subtotalA">${money(r.subtotalA)}</b></div>
+    </div>
+    <div class="section-title" style="margin:16px 0 8px">Otros</div>
+    <div class="confeccion-head"><div>Concepto</div><div></div><div>%</div><div class="right">Total</div></div>
+    <div class="confeccion-row">
+      <div>Flete</div>
+      <div></div>
+      <div class="pct-cell"><input class="ci-flete pct" type="number" step="1" value="${formatPct(r.fletePct)}"> <span class="unidad">%</span></div>
+      <div class="flete-subtotal right">${money(r.flete)}</div>
+    </div>
+    <div class="confeccion-row">
+      <div>Costo Finan/Impos/Imprevisto</div>
+      <div></div>
+      <div class="pct-cell"><input class="ci-finimp pct" type="number" step="1" value="${formatPct(r.finImpPct)}"> <span class="unidad">%</span></div>
+      <div class="finimp-subtotal right">${money(r.finImp)}</div>
+    </div>
+    <div class="confeccion-row subtotal">
+      <div>Subtotal B</div><div></div><div></div>
+      <div class="cs-subtotalB right">${money(r.subtotalB)}</div>
+    </div>
+
+    <div class="cost-summary">
+      <div class="cs-row sub"><span>Total costo (A + B)</span><b class="cs-totalcosto">${money(r.totalCosto)}</b></div>
+    </div>
+    <div class="section-title" style="margin:16px 0 8px">Margen Unitario</div>
+    <div class="margen-escenarios">
+      ${MARGEN_ESCENARIOS.map(p=>`
+      <button type="button" class="margen-esc ${margenActivo(it,p)?'active':''}" data-pct="${p}">
+        <span class="me-pct">${Math.round(p*100)}%</span>
+        <span class="me-monto">${money(r.totalCosto*p)}</span>
+      </button>`).join('')}
+      <div class="margen-manual ${!margenEsEscenario(it)?'active':''}">
+        <span class="me-pct">Manual <input class="ci-margen" type="number" step="1" value="${formatPct(it.margenPct)}">%</span>
+        <span class="me-monto cs-margen">${money(r.margenMonto)}</span>
+      </div>
+    </div>
+    <div class="cost-summary">
+      <div class="section-title" style="margin:0 0 4px;font-size:15px">Performance Item ${i+1}</div>
+      <div class="cs-row hl"><span>Venta con IVA</span><b class="cs-totalconiva">${money(r.totalConIva)}</b></div>
+      <div class="cs-row"><span>Venta sin IVA</span><b class="cs-totalneto">${money(r.totalNeto)}</b></div>
+      <div class="cs-row"><span>Costo</span><b class="cs-costototal">${money(r.totalCosto*(+it.cantidad||0))}</b></div>
+      <div class="cs-row"><span>Margen</span><b class="cs-margentotal">${money(r.margenMonto*(+it.cantidad||0))}</b></div>
+      <div class="cs-row hl big"><span>Margen %</span><b class="cs-margenpct">${formatPct(r.totalCosto>0?r.margenMonto/r.totalCosto:0)}%</b></div>
+    </div>
+    </div>
+  </div>`;
+}
+function calcularTotalesCotizacion2(items){
+  return items.reduce((s,it)=>{ const r=calcularItem2(it); const cantidad=+it.cantidad||0;
+    s.neto+=r.totalNeto; s.iva+=r.iva; s.conIva+=r.totalConIva;
+    s.costo+=r.totalCosto*cantidad; s.margen+=r.margenMonto*cantidad;
+    return s; }, {neto:0,iva:0,conIva:0,costo:0,margen:0});
+}
+function renderDetalleCotizacion2(c){
+  const items = (c.items&&c.items.length)? c.items : [itemNuevo2()];
+  const totales = calcularTotalesCotizacion2(items);
+  const margenPctTotal = totales.costo>0 ? totales.margen/totales.costo : 0;
+  return `
+    <div class="cotdet-bleed full-bleed">
+      <div class="backlink" onclick="cerrarDetalleCotizacion2()">← Volver a Costos y Cotizaciones 2</div>
+      <div class="page-head">
+        <div class="icon">🧮</div>
+        <div style="flex:1"><h1>Cotización ${esc(c.id)} ${estadoBadge(c.estado||'Pendiente')}</h1>
+          <div class="sub">${esc(c.empresa)}${c.rut?' · RUT '+esc(c.rut):''}${c.contacto?' · '+esc(c.contacto):''}</div>
+        </div>
+        <button class="btn" onclick="guardarItemsCotizacion2()">💾 Guardar cambios</button>
+      </div>
+    </div>
+
+    <div id="itemsHeadersBar">
+      <div class="items-headers-bar full-bleed">
+        <div class="items-headers-track" id="itemsHeadersTrack">${items.map((it,i)=>headerBlockHTML2(it,i)).join('')}</div>
+      </div>
+    </div>
+    <div id="itemsCot" class="full-bleed">${items.map((it,i)=>itemCardHTML2(it,i)).join('')}</div>
+    <div class="full-bleed">
+      <div class="row" style="margin-top:16px">
+        <button class="btn ghost sm" id="addItemCot">+ Agregar ítem</button>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
+        <div class="row between">
+          <h2 style="margin:0">Performance Total</h2>
+        </div>
+        <div class="cost-summary" style="margin-top:10px">
+          <div class="cs-row hl"><span>Venta con IVA</span><b id="grTotalConIva">${money(totales.conIva)}</b></div>
+          <div class="cs-row"><span>Venta sin IVA</span><b id="grTotalNeto">${money(totales.neto)}</b></div>
+          <div class="cs-row"><span>Costo</span><b id="grCostoTotal">${money(totales.costo)}</b></div>
+          <div class="cs-row"><span>Margen</span><b id="grMargenTotal">${money(totales.margen)}</b></div>
+          <div class="cs-row hl big"><span>Margen %</span><b id="grMargenPct">${formatPct(margenPctTotal)}%</b></div>
+        </div>
+      </div>
+    </div>`;
+}
+function leerItemDeCard2(card){
+  const anchoV=card.querySelector('.ci-ancho').value.trim(), altoV=card.querySelector('.ci-alto').value.trim();
+  return {
+    medida:(anchoV&&altoV)? `${anchoV} x ${altoV} m` : '',
+    cantidad:+card.querySelector('.ci-cant').value||0,
+    tipo:card.querySelector('.ci-tipo').value.trim(),
+    tipoProducto:card.querySelector('.ci-tipoproducto').value,
+    foto:card.querySelector('.ci-foto').value||'',
+    alto:altoV,
+    ancho:anchoV,
+    tipoTela:card.querySelector('.ci-tipotela').value.trim(),
+    telaCosto:card.querySelector('.ci-telacosto').value,
+    creaCant:card.querySelector('.ci-creacant').value,
+    numEstrellas:card.querySelector('.ci-numestrellas').value,
+    creaCosto:card.querySelector('.ci-creacosto').value,
+    tipoVaina:card.querySelector('.ci-tipovaina').value,
+    huinchaCosto:card.querySelector('.ci-huinchacosto').value,
+    argollaCosto:card.querySelector('.ci-argollacosto').value,
+    argollaExtra:+card.querySelector('.ci-argollaextra').value||0,
+    tipoAcabado:card.querySelector('.ci-tipoacabado').value,
+    armadoCosto:parseMiles(card.querySelector('.ci-armadocosto').value),
+    cortadoCosto:parseMiles(card.querySelector('.ci-cortadocosto').value),
+    estrellaCosto:parseMiles(card.querySelector('.ci-estrellacosto').value),
+    limpiezaCosto:parseMiles(card.querySelector('.ci-limpiezacosto').value),
+    sublimadoCosto:parseMiles(card.querySelector('.ci-sublimadocosto').value),
+    fletePct:(+card.querySelector('.ci-flete').value||0)/100,
+    finImpPct:(+card.querySelector('.ci-finimp').value||0)/100,
+    margenPct:(+card.querySelector('.ci-margen').value||0)/100,
+  };
+}
+function leerItemsDesdeDOM2(){
+  return [...document.querySelectorAll('#itemsCot .item-card')].map(leerItemDeCard2);
+}
+function recalcCardDetalle2(card){
+  const wrap=$('#itemsCot'); if(!wrap) return;
+  const it=leerItemsDesdeDOM2()[[...wrap.children].indexOf(card)];
+  if(!it) return;
+  const r=calcularItem2(it);
+  card.querySelector('.cs-subtotalA').textContent=money(r.subtotalA);
+  card.querySelector('.flete-subtotal').textContent=money(r.flete);
+  card.querySelector('.finimp-subtotal').textContent=money(r.finImp);
+  card.querySelector('.cs-subtotalB').textContent=money(r.subtotalB);
+  card.querySelector('.cs-totalcosto').textContent=money(r.totalCosto);
+  card.querySelector('.cs-margen').textContent=money(r.margenMonto);
+  card.querySelector('.cs-totalneto').textContent=money(r.totalNeto);
+  card.querySelector('.cs-totalconiva').textContent=money(r.totalConIva);
+  const cantidad=+it.cantidad||0;
+  card.querySelector('.cs-costototal').textContent=money(r.totalCosto*cantidad);
+  card.querySelector('.cs-margentotal').textContent=money(r.margenMonto*cantidad);
+  card.querySelector('.cs-margenpct').textContent=formatPct(r.totalCosto>0?r.margenMonto/r.totalCosto:0)+'%';
+  card.querySelector('.tela-cant').textContent=formatNumCL(r.telaCant,1);
+  card.querySelector('.tela-subtotal').textContent=money(r.telaSubtotal);
+  card.querySelector('.crea-subtotal').textContent=money(r.creaSubtotal);
+  card.querySelector('.ci-creacosto').disabled=!r.creaActiva;
+  card.querySelector('.ci-creacant').disabled=!r.creaActiva;
+  card.querySelector('.ci-numestrellas').disabled=!r.creaActiva;
+  card.querySelector('.subtotal-telas').textContent=money(r.telaSubtotal+r.creaSubtotal);
+  card.querySelector('.huincha-cant').textContent=formatNumCL(r.huinchaCant,1);
+  card.querySelector('.huincha-subtotal').textContent=money(r.huinchaSubtotal);
+  card.querySelector('.argollas-base').textContent=r.argollasBase;
+  card.querySelector('.argolla-subtotal').textContent=money(r.argollaSubtotal);
+  card.querySelector('.subtotal-accesorios').textContent=money(r.subtotalAccesorios);
+  card.querySelector('.armado-subtotal').textContent=money(r.armadoSubtotal);
+  card.querySelector('.cortado-subtotal').textContent=money(r.cortadoSubtotal);
+  card.querySelector('.estrella-subtotal').textContent=money(r.estrellaSubtotal);
+  toggleWarnFila(card.querySelector('.ci-armadocosto'), r.armadoCosto===0);
+  toggleWarnFila(card.querySelector('.ci-cortadocosto'), r.cortadoCosto===0);
+  toggleWarnFila(card.querySelector('.ci-estrellacosto'), r.estrellaCosto===0);
+  card.querySelector('.limpieza-subtotal').textContent=money(r.limpiezaSubtotal);
+  card.querySelector('.ci-sublimadocosto').disabled=!r.sublimadoAplica;
+  card.querySelector('.sublimado-subtotal').textContent=money(r.sublimadoSubtotal);
+  card.querySelector('.subtotal-confeccion').textContent=money(r.subtotalConfeccion);
+  card.querySelectorAll('.margen-esc[data-pct]').forEach(btn=>{
+    const p=+btn.dataset.pct;
+    btn.classList.toggle('active', margenActivo(it,p));
+    btn.querySelector('.me-monto').textContent=money(r.totalCosto*p);
+  });
+  const manualBox=card.querySelector('.margen-manual');
+  if(manualBox) manualBox.classList.toggle('active', !margenEsEscenario(it));
+}
+function recalcTotalesDetalle2(){
+  const items=leerItemsDesdeDOM2();
+  const t=calcularTotalesCotizacion2(items);
+  const margenPctTotal = t.costo>0 ? t.margen/t.costo : 0;
+  const gN=$('#grTotalNeto'), gC=$('#grTotalConIva'), gCo=$('#grCostoTotal'), gM=$('#grMargenTotal'), gP=$('#grMargenPct');
+  if(gN) gN.textContent=money(t.neto);
+  if(gC) gC.textContent=money(t.conIva);
+  if(gCo) gCo.textContent=money(t.costo);
+  if(gM) gM.textContent=money(t.margen);
+  if(gP) gP.textContent=formatPct(margenPctTotal)+'%';
+}
+function aplicarFotoACard2(card, dataUrl){
+  card.querySelector('.ci-foto').value=dataUrl||'';
+  card.querySelector('.foto-preview').innerHTML = dataUrl? `<img src="${dataUrl}">` : `<div class="foto-empty">Sin foto<br>(arrastra o pega aquí)</div>`;
+  const wrap=$('#itemsCot'), track=$('#itemsHeadersTrack');
+  if(wrap && track){
+    const idx=[...wrap.children].indexOf(card);
+    const block=track.children[idx];
+    const mini=block && block.querySelector('.item-card-head-mini');
+    if(mini) mini.innerHTML = dataUrl? `<img src="${dataUrl}">` : '';
+  }
+  const actions=card.querySelector('.foto-actions');
+  const quitar=actions.querySelector('.foto-quitar');
+  if(dataUrl && !quitar){
+    const btn=document.createElement('button'); btn.type='button'; btn.className='btn ghost sm foto-quitar'; btn.textContent='✕ Quitar';
+    actions.appendChild(btn);
+  } else if(!dataUrl && quitar){ quitar.remove(); }
+}
+function abrirGaleriaFotos2(card){
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box wide">
+    <div class="row between"><h2 style="margin:0">Galería de banderas</h2><button class="btn ghost sm" id="galClose" type="button">Cerrar</button></div>
+    <input type="text" id="galBuscar" placeholder="Buscar por nombre..." style="margin:12px 0">
+    <div class="gal-grid" id="galGrid"></div>
+  </div>`;
+  document.body.appendChild(bg);
+  function renderGrid(filtro){
+    const q=normalizarNombre(filtro||'');
+    const lista=FOTOS.items
+      .filter(f=>!q||normalizarNombre(f.nombre).includes(q))
+      .slice()
+      .sort((a,b)=> contarUsosFotoGuardada(b.img)-contarUsosFotoGuardada(a.img) || normalizarNombre(a.nombre).localeCompare(normalizarNombre(b.nombre)));
+    const grid=bg.querySelector('#galGrid');
+    grid.innerHTML = lista.length? lista.map(f=>`<div class="gal-item" data-id="${f.id}">
+        <img src="${f.img}"><div class="gal-name">${esc(f.nombre)}</div></div>`).join('')
+      : `<div class="muted" style="padding:20px">No hay fotos guardadas${filtro?' con ese nombre':''} todavía.</div>`;
+    grid.querySelectorAll('.gal-item').forEach(el=>el.onclick=()=>{
+      const f=FOTOS.items.find(x=>x.id===el.dataset.id);
+      if(f){ aplicarFotoACard2(card, f.img); bg.remove(); toast('Foto asignada.'); }
+    });
+  }
+  renderGrid('');
+  bg.querySelector('#galBuscar').addEventListener('input', e=>renderGrid(e.target.value));
+  bg.querySelector('#galClose').onclick=()=>bg.remove();
+  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
+}
+function bindDetalleCotizacion2(){
+  const wrap=$('#itemsCot'); if(!wrap) return;
+  const recalcCard=recalcCardDetalle2, recalcTotales=recalcTotalesDetalle2;
+  const headersTrack=$('#itemsHeadersTrack');
+  if(headersTrack){
+    wrap.addEventListener('scroll', ()=>{ headersTrack.style.transform='translateX('+(-wrap.scrollLeft)+'px)'; }, {passive:true});
+  }
+  const headersBar=$('#itemsHeadersBar');
+  if(headersBar) headersBar.addEventListener('click', e=>{
+    const btn=e.target.closest('.del-item'); if(!btn) return;
+    const block=btn.closest('.item-card-head'); if(!block) return;
+    const idx=[...headersTrack.children].indexOf(block);
+    const cards=[...wrap.children];
+    if(cards.length<=1){ toast('Debe quedar al menos un ítem.','error'); return; }
+    marcarSucia2();
+    if(cards[idx]) cards[idx].remove();
+    block.remove();
+    recalcTotales();
+  });
+  wrap.addEventListener('input', e=>{
+    const card=e.target.closest('.item-card'); if(!card) return;
+    marcarSucia2();
+    recalcCard(card); recalcTotales();
+  });
+  wrap.addEventListener('change', e=>{
+    const card=e.target.closest('.item-card'); if(!card) return;
+    marcarSucia2();
+    if(e.target.classList.contains('ci-tipovaina')||e.target.classList.contains('ci-tipoacabado')){
+      const idx=[...wrap.children].indexOf(card);
+      const it=leerItemDeCard2(card);
+      if(e.target.classList.contains('ci-tipoacabado')){ delete it.creaCant; it.numEstrellas=1; } // recalcula la Estrella con la fórmula fresca, no arrastra el valor viejo
+      const div=document.createElement('div'); div.innerHTML=itemCardHTML2(it, idx);
+      wrap.replaceChild(div.firstElementChild, card);
+      if(headersTrack && headersTrack.children[idx]){
+        const divH=document.createElement('div'); divH.innerHTML=headerBlockHTML2(it, idx);
+        headersTrack.replaceChild(divH.firstElementChild, headersTrack.children[idx]);
+      }
+      recalcTotales();
+    }
+    else if(e.target.classList.contains('foto-file')){
+      const file=e.target.files[0]; if(!file) return;
+      comprimirImagen(file, dataUrl=>{
+        aplicarFotoACard2(card, dataUrl);
+        const tipo=card.querySelector('.ci-tipo').value.trim();
+        if(tipo){ FOTOS.items.push({id:uid(),nombre:tipo,img:dataUrl}); saveFotos(); }
+        toast('Foto agregada.');
+      });
+      e.target.value='';
+    }
+  });
+  wrap.addEventListener('dragover', e=>{
+    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
+    e.preventDefault();
+    dz.classList.add('drag-over');
+  });
+  wrap.addEventListener('dragleave', e=>{
+    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
+    dz.classList.remove('drag-over');
+  });
+  wrap.addEventListener('drop', e=>{
+    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+    const card=e.target.closest('.item-card'); if(!card) return;
+    const file=e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(!file){ return; }
+    if(!file.type || !file.type.startsWith('image/')){ toast('Arrastra un archivo de imagen.','error'); return; }
+    marcarSucia2();
+    comprimirImagen(file, dataUrl=>{
+      aplicarFotoACard2(card, dataUrl);
+      const tipo=card.querySelector('.ci-tipo').value.trim();
+      if(tipo){ FOTOS.items.push({id:uid(),nombre:tipo,img:dataUrl}); saveFotos(); }
+      toast('Foto agregada.');
+    });
+  });
+  wrap.addEventListener('paste', e=>{
+    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
+    const card=e.target.closest('.item-card'); if(!card) return;
+    const items=(e.clipboardData && e.clipboardData.items) || [];
+    let file=null;
+    for(const it of items){ if(it.type && it.type.startsWith('image/')){ file=it.getAsFile(); break; } }
+    if(!file){ toast('No hay ninguna imagen copiada en el portapapeles.','error'); return; }
+    e.preventDefault();
+    marcarSucia2();
+    comprimirImagen(file, dataUrl=>{
+      aplicarFotoACard2(card, dataUrl);
+      const tipo=card.querySelector('.ci-tipo').value.trim();
+      if(tipo){ FOTOS.items.push({id:uid(),nombre:tipo,img:dataUrl}); saveFotos(); }
+      toast('Foto pegada.');
+    });
+  });
+  wrap.addEventListener('click', e=>{
+    const card=e.target.closest('.item-card');
+    const margenBtn=e.target.closest('.margen-esc[data-pct]');
+    if(margenBtn){
+      marcarSucia2();
+      card.querySelector('.ci-margen').value=formatPct(+margenBtn.dataset.pct);
+      recalcCard(card); recalcTotales();
+    }
+    else if(e.target.classList.contains('foto-subir')){ card.querySelector('.foto-file').click(); }
+    else if(e.target.classList.contains('foto-buscar')){ abrirGaleriaFotos2(card); }
+    else if(e.target.classList.contains('foto-quitar')){ marcarSucia2(); aplicarFotoACard2(card, ''); }
+  });
+  wrap.addEventListener('focusout', e=>{
+    const card=e.target.closest('.item-card'); if(!card) return;
+    if(e.target.classList.contains('ci-ancho')||e.target.classList.contains('ci-alto')){
+      const v=e.target.value.trim();
+      e.target.value = v? formatNumCL(parseNumCL(v)) : '';
+      // Armado y Cortado siempre siguen la medida más cercana al cambiar Ancho/Alto
+      const ancho=parseNumCL(card.querySelector('.ci-ancho').value), alto=parseNumCL(card.querySelector('.ci-alto').value);
+      const nuevoArmado=armadoPorMedida2(ancho,alto);
+      card.querySelector('.ci-armadocosto').value=formatMiles(nuevoArmado);
+      card.querySelector('.ci-cortadocosto').value=formatMiles(cortadoPorMedida2(ancho,alto));
+      const tipoAcabadoActual=card.querySelector('.ci-tipoacabado').value;
+      card.querySelector('.ci-estrellacosto').value=formatMiles(tipoAcabadoActual==='Aplicado' ? nuevoArmado : estrellaPorMedida2(ancho,alto));
+      // Limpieza/Embolsado siempre es el % (por defecto 20%) del Armado, altiro
+      card.querySelector('.ci-limpiezacosto').value=formatMiles(nuevoArmado*CONFECCION_PCT2.limpieza);
+      // Estrella (metros de crea) sigue la fórmula (metros tela/12)*cantidad de estrellas, altiro
+      if(tipoAcabadoActual==='Estrella'){
+        const telaCantExactaAhora=(ancho&&alto)?((alto*ancho)/1.4)*1.2:0;
+        const numEstrellasAhora=+card.querySelector('.ci-numestrellas').value||1;
+        card.querySelector('.ci-creacant').value=redondear4((telaCantExactaAhora/12)*numEstrellasAhora);
+      }
+      recalcCard(card); recalcTotales();
+    }
+    else if(e.target.classList.contains('ci-numestrellas')){
+      const ancho=parseNumCL(card.querySelector('.ci-ancho').value), alto=parseNumCL(card.querySelector('.ci-alto').value);
+      const telaCantExactaAhora=(ancho&&alto)?((alto*ancho)/1.4)*1.2:0;
+      const numEstrellasAhora=+e.target.value||1;
+      card.querySelector('.ci-creacant').value=redondear4((telaCantExactaAhora/12)*numEstrellasAhora);
+      recalcCard(card); recalcTotales();
+    }
+    else if(e.target.classList.contains('ci-armadocosto')){
+      e.target.value=formatMiles(parseMiles(e.target.value));
+      const nuevoArmado=parseMiles(e.target.value);
+      card.querySelector('.ci-limpiezacosto').value=formatMiles(nuevoArmado*CONFECCION_PCT2.limpieza);
+      recalcCard(card); recalcTotales();
+    }
+    else if(e.target.classList.contains('ci-cortadocosto')
+      ||e.target.classList.contains('ci-estrellacosto')
+      ||e.target.classList.contains('ci-limpiezacosto')
+      ||e.target.classList.contains('ci-sublimadocosto')){
+      e.target.value=formatMiles(parseMiles(e.target.value));
+      recalcCard(card); recalcTotales();
+    }
+  });
+  const addBtn=$('#addItemCot');
+  if(addBtn) addBtn.onclick=()=>{
+    marcarSucia2();
+    const idx=wrap.children.length;
+    const nuevo=itemNuevo2();
+    const div=document.createElement('div');
+    div.innerHTML=itemCardHTML2(nuevo, idx);
+    wrap.appendChild(div.firstElementChild);
+    if(headersTrack){
+      const divH=document.createElement('div');
+      divH.innerHTML=headerBlockHTML2(nuevo, idx);
+      headersTrack.appendChild(divH.firstElementChild);
+    }
+    wrap.scrollTo({left:wrap.scrollWidth, behavior:'smooth'});
+  };
+  const buscarInput=$('#buscarAnteriorInput');
+  if(buscarInput) buscarInput.addEventListener('keydown', e=>{ if(e.key==='Enter') buscarItemsAnteriores2(); });
+}
+function buscarItemsAnteriores2(){
+  const q=normalizarNombre($('#buscarAnteriorInput').value);
+  const resDiv=$('#resultadosAnteriores'); if(!resDiv) return;
+  if(!q){ resDiv.innerHTML=''; return; }
+  const resultados=[];
+  COSTOS2.cotizaciones.forEach(cot=>{
+    (cot.items||[]).forEach((it,idx)=>{
+      const hay=normalizarNombre(it.tipo)+' '+normalizarNombre(it.medida);
+      if(hay.includes(q)) resultados.push({cot,it,idx});
+    });
+  });
+  if(!resultados.length){ resDiv.innerHTML='<div class="muted" style="padding:10px 0">Sin resultados.</div>'; return; }
+  resDiv.innerHTML=resultados.slice(0,25).map(r=>{
+    const calc=calcularItem2(r.it);
+    return `<div class="row between resultado-ant">
+      <div>${r.it.foto?`<img class="resultado-thumb" src="${r.it.foto}">`:''}
+        <b>${esc(r.it.tipo||'(sin tipo)')}</b> — ${esc(r.it.medida||'')}
+        <span class="muted"> · ${esc(r.cot.empresa)} (${esc(r.cot.id)}) · ${money(calc.totalConIva)}</span></div>
+      <button class="btn ok sm" onclick="copiarItemAnterior2('${r.cot.id}',${r.idx})">Copiar como nuevo ítem</button>
+    </div>`;
+  }).join('');
+}
+function abrirListadoCotizaciones2(){
+  const filas=[];
+  [...COSTOS2.cotizaciones].sort((a,b)=>b.fecha.localeCompare(a.fecha)).forEach(cot=>{
+    if(cot.items&&cot.items.length){
+      cot.items.forEach((it,idx)=>filas.push({cot,it,idx}));
+    } else {
+      filas.push({cot,it:null,idx:-1});
+    }
+  });
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box wide">
+    <div class="row between"><h2 style="margin:0">Listado de cotizaciones</h2><button class="btn ghost sm" id="listClose" type="button">Cerrar</button></div>
+    <div class="muted" style="font-size:12px;margin:6px 0 10px">${filas.length} ítem(s) en ${COSTOS2.cotizaciones.length} cotización(es).</div>
+    <div style="overflow-y:auto">
+      <table><thead><tr><th>Cliente</th><th>Bandera</th><th>Fecha</th><th></th></tr></thead><tbody>
+        ${filas.map(f=>`<tr>
+          <td>${esc(f.cot.empresa)}<div class="tag" style="font-size:10px">${esc(f.cot.id)}</div></td>
+          <td>${f.it? (f.it.foto?`<img class="resultado-thumb" src="${f.it.foto}">`:'')+esc(f.it.tipo||'(sin tipo)') : '<span class="muted">— sin ítems —</span>'}</td>
+          <td>${fmtDateCL(f.cot.fecha)}</td>
+          <td class="right">${f.it? `<button class="btn ok sm" onclick="copiarItemAnterior2('${f.cot.id}',${f.idx});this.closest('.confirm-bg').remove()">Copiar</button>`:''}</td>
+        </tr>`).join('')}
+      </tbody></table>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  bg.querySelector('#listClose').onclick=()=>bg.remove();
+  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
+}
+function copiarItemAnterior2(cotId, idx){
+  const cot=COSTOS2.cotizaciones.find(x=>x.id===cotId); if(!cot) return;
+  const src=cot.items[idx]; if(!src) return;
+  const clone=JSON.parse(JSON.stringify(src));
+  const wrap=$('#itemsCot'); if(!wrap) return;
+  const div=document.createElement('div');
+  div.innerHTML=itemCardHTML2(clone, wrap.children.length);
+  const nuevo=div.firstElementChild;
+  wrap.appendChild(nuevo);
+  recalcTotalesDetalle2();
+  toast('Ítem copiado abajo. Revisa los datos y presiona Guardar cambios.');
+  nuevo.scrollIntoView({behavior:'smooth', block:'center'});
+}
+function guardarItemsCotizacion2(){
+  const items=leerItemsDesdeDOM2();
+  const c=COSTOS2.cotizaciones.find(x=>x.id===detalleCotId2); if(!c) return;
+  c.items=items;
+  c.total=items.reduce((s,it)=>s+calcularItem2(it).totalConIva,0);
+  saveCostos2();
+  cotizacionSucia2=false;
+  toast('Cambios guardados.');
+  render();
+}
+
+function guardarCotizacionCliente2(){
+  const newId=$('#cfId').value.trim();
+  if(!newId){ toast('Ingresa un ID para la cotización (ej: COT-2026-001).','error'); return; }
+  const dupe=COSTOS2.cotizaciones.find(c=>c.id===newId && c.id!==draftEditOrig2);
+  if(dupe){ toast('Ya existe una cotización con el ID "'+newId+'". Usa otro.','error'); return; }
+  const empresa=toTitleCase($('#cfEmpresa').value.trim());
+  if(!empresa){ toast('Falta el nombre del cliente/empresa.','error'); return; }
+  const record={
+    id:newId,
+    fecha:$('#cfFecha').value||todayISO(),
+    estado:draftCliente2.estado||'Pendiente',
+    empresa,
+    rut:formatRut($('#cfRut').value.trim()),
+    contacto:toTitleCase($('#cfContacto').value.trim()),
+    mail:$('#cfMail').value.trim().toLowerCase(),
+    telefono:formatTelefono($('#cfTelefono').value.trim()),
+    telefono2:formatTelefono($('#cfTelefono2').value.trim()),
+    direccion:toTitleCase($('#cfDireccion').value.trim()),
+    comuna:toTitleCase($('#cfComuna').value.trim()),
+    region:$('#cfRegion').value||'',
+    items:draftCliente2.items||[],
+    total:draftCliente2.total||0,
+  };
+  if(draftEditOrig2){
+    const idx=COSTOS2.cotizaciones.findIndex(x=>x.id===draftEditOrig2);
+    if(idx>=0) COSTOS2.cotizaciones[idx]=record; else COSTOS2.cotizaciones.push(record);
+  } else {
+    COSTOS2.cotizaciones.push(record);
+  }
+  saveCostos2();
+  nuevoDraftCliente2();
+  render();
+}
+function editarCotizacionCliente2(id){
+  const c=COSTOS2.cotizaciones.find(x=>x.id===id); if(!c) return;
+  draftCliente2={...c}; draftEditOrig2=id; draftClienteSucio2=false; render(); window.scrollTo(0,0);
+}
+function eliminarCotizacionCliente2(id){
+  confirmDialog('¿Eliminar la cotización '+id+'?', ()=>{
+    COSTOS2.cotizaciones=COSTOS2.cotizaciones.filter(x=>x.id!==id);
+    saveCostos2();
+    if(draftEditOrig2===id) nuevoDraftCliente2();
+    render();
+    toast('Cotización eliminada.');
+  });
+}
+
+
 /* ============================ MERCADO PÚBLICO ============================ */
 const KEY_MERCADO='taller_gary_mercado_v1';
 /* "asta" se sacó de la lista (v3): al ser tan corta, calzaba adentro de otras palabras
@@ -2880,6 +4360,7 @@ function renderModule(m){
   if(m.id==='produccion'){ return renderProduccion(m); }
   if(m.id==='sublimacion'){ return renderSublimacion(m); }
   if(m.id==='costos'){ return renderCostos(m); }
+  if(m.id==='costos2'){ return renderCostos2(m); }
   if(m.id==='mercado'){ return renderMercado(m); }
   return `
     <div class="backlink" onclick="go('inicio')">← Volver al inicio</div>
