@@ -182,7 +182,7 @@
     border-bottom:1px solid var(--glass-strong)}
   #itemsHeadersBar{position:sticky!important;top:114px;z-index:6}
   .items-headers-track{display:flex;flex-direction:row;gap:16px;padding:14px 0;will-change:transform}
-  .item-card-head{display:flex;align-items:center;gap:10px;flex:0 0 460px;width:460px}
+  .item-card-head{display:flex;align-items:center;gap:10px;flex:0 0 640px;width:640px}
   .item-card-head-mini{flex:0 0 auto;width:34px;height:26px;border-radius:6px;overflow:hidden;
     border:1px solid var(--gold-line);background:#fff}
   .item-card-head-mini img{width:100%;height:100%;object-fit:cover;display:block}
@@ -384,6 +384,9 @@
   .field{margin-bottom:14px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px}
+  .grid-tipo{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:12px}
+  .grid-cant{display:grid;grid-template-columns:1fr 3fr;gap:12px}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .row.between{justify-content:space-between}
   .muted{color:var(--muted)}
@@ -415,7 +418,7 @@
   .cotdet-bleed{margin-bottom:18px}
   #itemsCot{display:flex;flex-direction:row;align-items:flex-start;gap:16px;
     overflow-x:auto;padding-bottom:12px}
-  #itemsCot .item-card{flex:0 0 460px;width:460px;margin-bottom:0}
+  #itemsCot .item-card{flex:0 0 640px;width:640px;margin-bottom:0}
   @media(max-width:760px){#itemsCot .item-card{flex-basis:88vw;width:88vw}}
   .del-item{background:linear-gradient(180deg,#e0665a,#d4483d);border:none;color:#fff;border-radius:9px;
     cursor:pointer;font-size:13px}
@@ -440,7 +443,7 @@
   .margen-manual{cursor:default}
   .margen-manual .me-pct{display:flex;align-items:center;justify-content:center;gap:4px;color:var(--muted);font-weight:600;font-size:12px}
   .margen-manual input{width:46px;padding:4px 6px;font-size:12px;text-align:right}
-  @media(max-width:640px){.grid2,.grid3{grid-template-columns:1fr}
+  @media(max-width:640px){.grid2,.grid3,.grid4,.grid-tipo,.grid-cant{grid-template-columns:1fr}
     .margen-escenarios{grid-template-columns:repeat(2,1fr)}}
 
   /* ---------- Exportar Sublimación (Impresión/Sublimado) a PDF ---------- */
@@ -1625,21 +1628,21 @@ function itemCardHTML(it, i){
   const r = calcularItem(it);
   return `<div class="panel item-card" data-idx="${i}">
     <div class="item-body">
-    <div class="field"><label>Tipo de producto</label>
-      <select class="ci-tipoproducto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
-    </div>
-    <div class="grid2">
+    <div class="grid-tipo">
+      <div class="field"><label>Tipo de producto</label>
+        <select class="ci-tipoproducto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
+      </div>
       <div class="field"><label>Ancho (m)</label><input class="ci-ancho" type="text" inputmode="decimal" value="${it.ancho?esc(it.ancho):''}" placeholder="Ej: 3,00"></div>
       <div class="field"><label>Alto (m)</label><input class="ci-alto" type="text" inputmode="decimal" value="${it.alto?esc(it.alto):''}" placeholder="Ej: 2,00"></div>
     </div>
-    <div class="grid2">
+    <div class="grid-cant">
       <div class="field"><label>Cantidad</label><input class="ci-cant" type="number" min="0" step="1" value="${it.cantidad}"></div>
       <div class="field"><label>Nombre de bandera</label><input class="ci-tipo" value="${esc(it.tipo)}" placeholder="Chilena / Institucional / Ejército..."></div>
     </div>
 
     <label>Tela</label>
-    <div class="field"><label>Tipo de tela</label><input class="ci-tipotela" value="${esc(it.tipoTela||'Bistrech')}" placeholder="Bistrech"></div>
-    <div class="grid3">
+    <div class="grid4">
+      <div class="field"><label>Tipo de tela</label><input class="ci-tipotela" value="${esc(it.tipoTela||'Bistrech')}" placeholder="Bistrech"></div>
       <div class="field"><label>Tipo de vaina</label><select class="ci-tipovaina">${TIPOS_VAINA.map(tv=>`<option ${((it.tipoVaina||'Vaina de Lona')===tv)?'selected':''}>${tv}</option>`).join('')}</select></div>
       <div class="field"><label>Especificación</label><select class="ci-tipoacabado">${TIPOS_ACABADO.map(ta=>`<option ${((it.tipoAcabado||'Confección')===ta)?'selected':''}>${ta}</option>`).join('')}</select></div>
       <div class="field"><label>Cantidad de Estrellas</label><input class="ci-numestrellas" type="number" min="0" step="1" value="${r.numEstrellas}" ${r.creaActiva?'':'disabled'}></div>
