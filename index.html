@@ -161,6 +161,18 @@
   .foto-box-mini .foto-preview{width:40px;height:30px;border-radius:6px;cursor:pointer}
   .foto-box-mini .foto-empty{font-size:14px;padding:0}
 
+  /* Panel "Insumos" (Costos y Cotizaciones 2): cada insumo es una columna angosta, todas
+     en una sola fila (con scroll lateral propio si no calzan, sin romper el ancho del ítem). */
+  .insumos-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+  .insumo-col{flex:0 0 108px;width:108px;display:flex;flex-direction:column;gap:4px}
+  .insumo-col-total{flex-basis:88px;width:88px}
+  .insumo-titulo{font-size:11px;font-weight:700;color:var(--gold-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .insumo-select.insumo-titulo{padding:2px 4px;font-size:10.5px;font-weight:700;color:var(--gold-d);border-color:var(--gold-line)}
+  .insumo-cant{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:3px;white-space:nowrap}
+  .insumo-cant-input{width:38px;padding:2px 3px;font-size:11px;text-align:right}
+  .insumo-costo{padding:4px 6px;font-size:12px;text-align:right}
+  .insumo-total{font-size:12.5px;font-weight:700;text-align:right}
+
   /* ---------- Galería de fotos ---------- */
   .gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;overflow-y:auto;padding-right:4px}
   .gal-item{cursor:pointer;border:1px solid var(--gold-line);border-radius:10px;overflow:hidden;background:#fff;transition:.15s}
@@ -3244,40 +3256,39 @@ function headerBlockHTML2(it, i){
 function insumosPanelHTML2(it){
   const r=calcularInsumos2(it);
   return `<div class="insumos-panel" style="display:none;margin:2px 0 8px">
-    <div class="section-title" style="margin:10px 0 8px">Insumos</div>
-    <div class="tela-costeo-head"><div>Concepto</div><div>Cantidad</div><div>Costo unit.</div><div class="right">Total</div></div>
-    <div class="tela-costeo-row">
-      <div>Tela</div>
-      <div><span class="ins-tela-cant">${formatNumCL(r.telaCant,1)}</span> <span class="unidad">m</span></div>
-      <input class="ci-telacosto" type="number" step="1" value="${r.telaCosto}">
-      <div class="ins-tela-subtotal right">${money(r.telaSubtotal)}</div>
-    </div>
-    <div class="tela-costeo-row">
-      <div>Estrella</div>
-      <div class="argolla-cant-cell"><input class="ci-creacant" type="number" min="0" step="0.1" value="${r.creaCant}"> <span class="unidad">m</span></div>
-      <input class="ci-creacosto" type="number" step="1" value="${r.creaCosto}">
-      <div class="ins-crea-subtotal right">${money(r.creaSubtotal)}</div>
-    </div>
-    <div class="tela-costeo-row">
-      <div>
-        <select class="ci-tipovaina" style="width:auto;padding:4px 6px;font-size:12px">${TIPOS_VAINA.map(tv=>`<option ${r.tipoVaina===tv?'selected':''}>${tv}</option>`).join('')}</select>
+    <div class="insumos-row">
+      <div class="insumo-col">
+        <div class="insumo-titulo">Tela</div>
+        <div class="insumo-cant"><span class="ins-tela-cant">${formatNumCL(r.telaCant,1)}</span> m</div>
+        <input class="ci-telacosto insumo-costo" type="number" step="1" value="${r.telaCosto}">
+        <div class="insumo-total ins-tela-subtotal">${money(r.telaSubtotal)}</div>
       </div>
-      <div class="argolla-cant-cell"><span class="ins-huincha-cant">${r.esHuincha?formatNumCL(r.huinchaCant,1):'—'}</span> <span class="unidad">${r.esHuincha?'m':''}</span></div>
-      <input class="ci-huinchacosto" type="number" step="1" value="${r.esHuincha?r.huinchaCosto:r.vainaCosto}">
-      <div class="ins-huincha-subtotal right">${money(r.huinchaSubtotal)}</div>
-    </div>
-    <div class="tela-costeo-row">
-      <div>Argollas ${r.esHuincha?'':'<span class="muted">(no aplica: vaina de lona)</span>'}</div>
-      <div class="argolla-cant-cell">
-        <span class="ins-argollas-base">${r.argollasBase}</span><span class="muted">+</span>
-        <input class="ci-argollaextra" type="number" step="1" value="${it.argollaExtra||0}" title="Argolla extra (puede ser negativa para restar)" ${r.esHuincha?'':'disabled'}> <span class="unidad">un.</span>
+      <div class="insumo-col">
+        <div class="insumo-titulo">Estrella</div>
+        <div class="insumo-cant"><input class="ci-creacant insumo-cant-input" type="number" min="0" step="0.1" value="${r.creaCant}"> m</div>
+        <input class="ci-creacosto insumo-costo" type="number" step="1" value="${r.creaCosto}">
+        <div class="insumo-total ins-crea-subtotal">${money(r.creaSubtotal)}</div>
       </div>
-      <input class="ci-argollacosto" type="number" step="1" value="${r.argollaCosto}" ${r.esHuincha?'':'disabled'}>
-      <div class="ins-argolla-subtotal right">${money(r.argollaSubtotal)}</div>
-    </div>
-    <div class="tela-costeo-row subtotal">
-      <div>Subtotal insumos</div><div></div><div></div>
-      <div class="ins-subtotal right">${money(r.subtotalInsumos)}</div>
+      <div class="insumo-col">
+        <select class="ci-tipovaina insumo-titulo insumo-select">${TIPOS_VAINA.map(tv=>`<option value="${esc(tv)}" ${r.tipoVaina===tv?'selected':''}>${tv==='Huincha de poliéster'?'H. Poliéster':'V. Lona'}</option>`).join('')}</select>
+        <div class="insumo-cant"><span class="ins-huincha-cant">${r.esHuincha?formatNumCL(r.huinchaCant,1):'—'}</span>${r.esHuincha?' m':''}</div>
+        <input class="ci-huinchacosto insumo-costo" type="number" step="1" value="${r.esHuincha?r.huinchaCosto:r.vainaCosto}">
+        <div class="insumo-total ins-huincha-subtotal">${money(r.huinchaSubtotal)}</div>
+      </div>
+      <div class="insumo-col">
+        <div class="insumo-titulo">Argollas</div>
+        <div class="insumo-cant">
+          <span class="ins-argollas-base">${r.argollasBase}</span>+<input class="ci-argollaextra insumo-cant-input" type="number" step="1" value="${it.argollaExtra||0}" title="Argolla extra (puede ser negativa para restar)" ${r.esHuincha?'':'disabled'}>
+        </div>
+        <input class="ci-argollacosto insumo-costo" type="number" step="1" value="${r.argollaCosto}" ${r.esHuincha?'':'disabled'}>
+        <div class="insumo-total ins-argolla-subtotal">${money(r.argollaSubtotal)}</div>
+      </div>
+      <div class="insumo-col insumo-col-total">
+        <div class="insumo-titulo">Subtotal</div>
+        <div class="insumo-cant">&nbsp;</div>
+        <div class="insumo-cant">&nbsp;</div>
+        <div class="insumo-total ins-subtotal">${money(r.subtotalInsumos)}</div>
+      </div>
     </div>
   </div>`;
 }
