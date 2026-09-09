@@ -3308,12 +3308,12 @@ function itemCardHTML2(it, i){
         <input type="file" accept="image/*" class="foto-file" style="display:none">
       </div>
       <input type="hidden" class="ci-foto" value="${esc(it.foto||'')}">
-      <select class="ci-tipoproducto" style="flex:0 0 auto;width:auto" title="Tipo de producto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
-      <select class="ci-medida" style="flex:0 0 auto;width:auto" title="Medidas">
+      <select class="ci-tipoproducto" style="flex:0 0 132px;width:132px" title="Tipo de producto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
+      <select class="ci-medida" style="flex:0 0 118px;width:118px" title="Medidas">
         <option value="">Medidas...</option>
         ${medidas.map(m=>`<option ${it.medida===m?'selected':''}>${m}</option>`).join('')}
       </select>
-      <select class="ci-tipotela" style="flex:0 0 auto;width:auto" title="Tela">${TIPOS_TELA2.map(tl=>`<option ${((it.tipoTela||'Bistrech')===tl)?'selected':''}>${tl}</option>`).join('')}</select>
+      <select class="ci-tipotela" style="flex:0 0 140px;width:140px" title="Tela">${TIPOS_TELA2.map(tl=>`<option ${((it.tipoTela||'Bistrech')===tl)?'selected':''}>${tl}</option>`).join('')}</select>
       <button class="btn ghost sm insumos-toggle" type="button">▾ Insumos</button>
       ${insumosPanelHTML2(it)}
     </div>
