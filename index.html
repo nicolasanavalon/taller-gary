@@ -155,6 +155,11 @@
   .foto-preview.drag-over{border-color:var(--gold);background:var(--gold-soft)}
   .foto-preview:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-soft)}
   .foto-actions{display:flex;gap:8px;flex-wrap:wrap}
+  /* Versión chica del cuadro de foto (Costos y Cotizaciones 2): todo en una sola fila,
+     se sube/quita apretando directo la foto, sin botones aparte. */
+  .foto-box-mini{margin:0;cursor:pointer}
+  .foto-box-mini .foto-preview{width:40px;height:30px;border-radius:6px;cursor:pointer}
+  .foto-box-mini .foto-empty{font-size:14px;padding:0}
 
   /* ---------- Galería de fotos ---------- */
   .gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;overflow-y:auto;padding-right:4px}
@@ -3113,33 +3118,20 @@ function itemCardHTML2(it, i){
   const medidas=medidasDisponibles2();
   return `<div class="panel item-card" data-idx="${i}">
     <div class="item-body">
-    <div class="row" style="align-items:center;gap:12px;flex-wrap:nowrap;margin-bottom:12px">
-      <h2 style="margin:0;white-space:nowrap;font-family:Georgia,'Times New Roman',serif;font-size:17px;color:var(--ink)">Ítem ${i+1}</h2>
-      <input class="ci-tipo" style="flex:1;min-width:0" value="${esc(it.tipo)}" placeholder="Nombre de la bandera (ej: Chilena, Institucional, Ejército...)">
-      <div class="foto-box" style="margin:0;flex:0 0 auto">
-        <div class="foto-preview" tabindex="0" title="Haz clic aquí y pega (Cmd+V) una imagen copiada">${it.foto?`<img src="${esc(it.foto)}">`:`<div class="foto-empty">Sin foto<br>(arrastra o pega aquí)</div>`}</div>
-        <div class="foto-actions">
-          <button class="btn ghost sm foto-subir" type="button">📤 Subir foto</button>
-          <input type="file" accept="image/*" class="foto-file" style="display:none">
-          <button class="btn ghost sm foto-buscar" type="button">🔍 Buscar en galería</button>
-          ${it.foto?`<button class="btn ghost sm foto-quitar" type="button">✕ Quitar</button>`:''}
-        </div>
+    <div class="row" style="align-items:center;gap:8px;flex-wrap:nowrap">
+      <h2 style="margin:0;flex:0 0 auto;white-space:nowrap;font-family:Georgia,'Times New Roman',serif;font-size:16px;color:var(--ink)">Ítem ${i+1}</h2>
+      <input class="ci-tipo" style="flex:1 1 auto;min-width:60px" value="${esc(it.tipo)}" placeholder="Nombre de la bandera">
+      <div class="foto-box foto-box-mini" style="margin:0;flex:0 0 auto">
+        <div class="foto-preview" tabindex="0" title="${it.foto?'Apreta para quitar la foto':'Apreta para subir una foto (o arrastra/pega una)'}">${it.foto?`<img src="${esc(it.foto)}">`:`<div class="foto-empty">📷</div>`}</div>
+        <input type="file" accept="image/*" class="foto-file" style="display:none">
       </div>
       <input type="hidden" class="ci-foto" value="${esc(it.foto||'')}">
-    </div>
-    <div class="grid3">
-      <div class="field"><label>Tipo de producto</label>
-        <select class="ci-tipoproducto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>Medidas</label>
-        <select class="ci-medida">
-          <option value="">Selecciona...</option>
-          ${medidas.map(m=>`<option ${it.medida===m?'selected':''}>${m}</option>`).join('')}
-        </select>
-      </div>
-      <div class="field"><label>Tela</label>
-        <select class="ci-tipotela">${TIPOS_TELA2.map(tl=>`<option ${((it.tipoTela||'Bistrech')===tl)?'selected':''}>${tl}</option>`).join('')}</select>
-      </div>
+      <select class="ci-tipoproducto" style="flex:0 0 auto;width:auto" title="Tipo de producto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
+      <select class="ci-medida" style="flex:0 0 auto;width:auto" title="Medidas">
+        <option value="">Medidas...</option>
+        ${medidas.map(m=>`<option ${it.medida===m?'selected':''}>${m}</option>`).join('')}
+      </select>
+      <select class="ci-tipotela" style="flex:0 0 auto;width:auto" title="Tela">${TIPOS_TELA2.map(tl=>`<option ${((it.tipoTela||'Bistrech')===tl)?'selected':''}>${tl}</option>`).join('')}</select>
     </div>
     </div>
   </div>`;
@@ -3223,7 +3215,9 @@ function recalcTotalesDetalle2(){
 }
 function aplicarFotoACard2(card, dataUrl){
   card.querySelector('.ci-foto').value=dataUrl||'';
-  card.querySelector('.foto-preview').innerHTML = dataUrl? `<img src="${dataUrl}">` : `<div class="foto-empty">Sin foto<br>(arrastra o pega aquí)</div>`;
+  const fp=card.querySelector('.foto-preview');
+  fp.innerHTML = dataUrl? `<img src="${dataUrl}">` : `<div class="foto-empty">📷</div>`;
+  fp.title = dataUrl? 'Apreta para quitar la foto' : 'Apreta para subir una foto (o arrastra/pega una)';
   const wrap=$('#itemsCot'), track=$('#itemsHeadersTrack');
   if(wrap && track){
     const idx=[...wrap.children].indexOf(card);
@@ -3231,12 +3225,6 @@ function aplicarFotoACard2(card, dataUrl){
     const mini=block && block.querySelector('.item-card-head-mini');
     if(mini) mini.innerHTML = dataUrl? `<img src="${dataUrl}">` : '';
   }
-  const actions=card.querySelector('.foto-actions');
-  const quitar=actions.querySelector('.foto-quitar');
-  if(dataUrl && !quitar){
-    const btn=document.createElement('button'); btn.type='button'; btn.className='btn ghost sm foto-quitar'; btn.textContent='✕ Quitar';
-    actions.appendChild(btn);
-  } else if(!dataUrl && quitar){ quitar.remove(); }
 }
 function abrirGaleriaFotos2(card){
   const bg=document.createElement('div'); bg.className='confirm-bg';
@@ -3365,9 +3353,13 @@ function bindDetalleCotizacion2(){
       card.querySelector('.ci-margen').value=formatPct(+margenBtn.dataset.pct);
       recalcCard(card); recalcTotales();
     }
-    else if(e.target.classList.contains('foto-subir')){ card.querySelector('.foto-file').click(); }
-    else if(e.target.classList.contains('foto-buscar')){ abrirGaleriaFotos2(card); }
-    else if(e.target.classList.contains('foto-quitar')){ marcarSucia2(); aplicarFotoACard2(card, ''); }
+    else if(e.target.closest('.foto-preview')){
+      // Un solo clic hace todo: si ya tiene foto, la quita; si está vacía, abre el
+      // selector de archivos para subir una nueva.
+      const tieneFoto=!!card.querySelector('.ci-foto').value;
+      if(tieneFoto){ marcarSucia2(); aplicarFotoACard2(card, ''); }
+      else { card.querySelector('.foto-file').click(); }
+    }
   });
   wrap.addEventListener('focusout', e=>{
     const card=e.target.closest('.item-card'); if(!card) return;
