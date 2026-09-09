@@ -2402,24 +2402,38 @@ function abrirMantenedorArgollas2(){
 }
 /* ---------- Mantenedor: Tarifado de Armado/Confección por medida (editable) ---------- */
 const KEY_TABLA_ARMADO2='taller_gary_tabla_armado2_v1';
+/* Versión de la lista de tarifas "de fábrica" de este módulo de pruebas. Cuando se sube
+   (ej: al cargar una lista nueva completa), load*2() de abajo descarta lo que hubiera
+   guardado en este navegador y vuelve a partir de la lista nueva — así una lista vieja en
+   localStorage no tapa la actualización. Los ajustes manuales hechos desde el mantenedor
+   (⚙️ Armado/Cortado/Festoneado) quedan igual, porque guardan la misma versión. */
+const TARIFADO2_VERSION=2;
 function seedTablaArmado2(){
-  // Transcrito de "Tarifado 2026 Gary" (mano de obra confección) — Banderas Regulares + Monumentales
-  return {filas:[
-    {ancho:0.30,alto:0.20,confeccion:500},{ancho:0.60,alto:0.40,confeccion:1000},{ancho:0.76,alto:0.61,confeccion:1430},
-    {ancho:0.80,alto:0.54,confeccion:1100},{ancho:1.00,alto:0.66,confeccion:1240},{ancho:1.20,alto:0.80,confeccion:1320},
-    {ancho:1.22,alto:1.00,confeccion:2080},{ancho:1.28,alto:0.84,confeccion:1320},{ancho:1.50,alto:1.00,confeccion:1760},
-    {ancho:1.70,alto:1.12,confeccion:2160},{ancho:1.80,alto:1.20,confeccion:2160},{ancho:2.10,alto:1.40,confeccion:2200},
-    {ancho:2.25,alto:1.50,confeccion:2420},{ancho:2.55,alto:1.70,confeccion:2420},{ancho:2.70,alto:1.80,confeccion:2620},
-    {ancho:3.00,alto:2.00,confeccion:3300},{ancho:3.55,alto:2.33,confeccion:4000},{ancho:4.00,alto:2.66,confeccion:4840},
-    {ancho:4.50,alto:3.00,confeccion:5445},{ancho:5.00,alto:3.33,confeccion:5800},{ancho:6.00,alto:4.00,confeccion:6200},
-    {ancho:7.00,alto:4.66,confeccion:9500},{ancho:8.00,alto:5.33,confeccion:13290},
-    {ancho:12.00,alto:8.00,confeccion:60000},{ancho:13.00,alto:8.67,confeccion:85000},{ancho:14.00,alto:9.33,confeccion:90000},
-    {ancho:15.00,alto:10.00,confeccion:95000},{ancho:16.00,alto:10.67,confeccion:105000},{ancho:17.00,alto:11.33,confeccion:120000},
-    {ancho:18.00,alto:12.00,confeccion:135000},
+  // Tarifado entregado por el usuario para el módulo de pruebas — "Armado Ana/Diana/Fernando"
+  return {v:TARIFADO2_VERSION, na:5000, filas:[
+    {ancho:0.30,alto:0.20,confeccion:500},{ancho:0.45,alto:0.30,confeccion:600},{ancho:0.50,alto:0.40,confeccion:600},
+    {ancho:0.60,alto:0.40,confeccion:1000},{ancho:0.65,alto:0.45,confeccion:1000},{ancho:0.70,alto:0.40,confeccion:1430},
+    {ancho:0.76,alto:0.61,confeccion:1430},{ancho:0.80,alto:0.54,confeccion:1100},{ancho:0.90,alto:0.60,confeccion:1240},
+    {ancho:1.00,alto:0.66,confeccion:1240},{ancho:1.10,alto:0.90,confeccion:1320},{ancho:1.20,alto:0.76,confeccion:1320},
+    {ancho:1.20,alto:0.80,confeccion:1320},{ancho:1.20,alto:1.00,confeccion:1320},{ancho:1.20,alto:1.15,confeccion:1320},
+    {ancho:1.22,alto:1.00,confeccion:2080},{ancho:1.28,alto:0.84,confeccion:1320},{ancho:1.40,alto:0.90,confeccion:1760},
+    {ancho:1.40,alto:1.14,confeccion:1760},{ancho:1.40,alto:1.40,confeccion:900},{ancho:1.50,alto:1.00,confeccion:1760},
+    {ancho:1.50,alto:1.20,confeccion:1760},{ancho:1.70,alto:1.12,confeccion:2160},{ancho:1.80,alto:0.60,confeccion:2000},
+    {ancho:1.80,alto:1.20,confeccion:2160},{ancho:1.80,alto:1.40,confeccion:1000},{ancho:1.95,alto:1.15,confeccion:2160},
+    {ancho:12.00,alto:8.00,confeccion:60000},{ancho:13.00,alto:8.67,confeccion:85000},{ancho:13.50,alto:9.00,confeccion:85000},
+    {ancho:14.00,alto:9.33,confeccion:90000},{ancho:15.00,alto:10.00,confeccion:95000},{ancho:16.00,alto:10.67,confeccion:105000},
+    {ancho:17.00,alto:11.33,confeccion:120000},{ancho:18.00,alto:12.00,confeccion:135000},
+    {ancho:2.00,alto:0.70,confeccion:2160},{ancho:2.00,alto:1.50,confeccion:1000},{ancho:2.10,alto:1.40,confeccion:2200},
+    {ancho:2.25,alto:1.50,confeccion:2420},{ancho:2.45,alto:0.70,confeccion:2800},{ancho:2.55,alto:1.70,confeccion:2420},
+    {ancho:2.70,alto:1.80,confeccion:2620},{ancho:3.00,alto:2.00,confeccion:3300},{ancho:3.20,alto:2.20,confeccion:3500},
+    {ancho:3.40,alto:1.50,confeccion:4000},{ancho:3.55,alto:2.33,confeccion:4000},{ancho:3.60,alto:2.40,confeccion:4000},
+    {ancho:4.00,alto:2.66,confeccion:4840},{ancho:4.50,alto:3.00,confeccion:5445},{ancho:5.00,alto:3.33,confeccion:5800},
+    {ancho:6.00,alto:4.00,confeccion:6200},{ancho:7.00,alto:4.66,confeccion:9500},{ancho:8.00,alto:5.33,confeccion:13290},
+    {ancho:9.00,alto:6.00,confeccion:35000},
   ]};
 }
 function loadTablaArmado2(){
-  try{ const raw=localStorage.getItem(KEY_TABLA_ARMADO2); if(raw) return JSON.parse(raw); }catch(e){ console.error(e); }
+  try{ const raw=localStorage.getItem(KEY_TABLA_ARMADO2); if(raw){ const data=JSON.parse(raw); if(data.v===TARIFADO2_VERSION) return data; } }catch(e){ console.error(e); }
   return seedTablaArmado2();
 }
 function saveTablaArmado2(){ localStorage.setItem(KEY_TABLA_ARMADO2, JSON.stringify(TABLA_ARMADO2)); }
@@ -2441,7 +2455,8 @@ function buscarPorMedidaTolerante(filas, campo, ancho, alto){
   return mejor ? mejor[campo] : 0;
 }
 function armadoPorMedida2(ancho, alto){
-  return buscarPorMedidaTolerante(TABLA_ARMADO2.filas||[], 'confeccion', ancho, alto);
+  const v=buscarPorMedidaTolerante(TABLA_ARMADO2.filas||[], 'confeccion', ancho, alto);
+  return v || TABLA_ARMADO2.na || 0;
 }
 function filaTablaArmadoHTML2(f){
   return `<div class="argollas-fila">
@@ -2479,7 +2494,7 @@ function abrirMantenedorArmado2(){
       alto:parseNumCL(r.querySelector('.tm-alto').value),
       confeccion:+r.querySelector('.tm-confeccion').value||0,
     }));
-    TABLA_ARMADO2={filas}; saveTablaArmado2();
+    TABLA_ARMADO2={v:TARIFADO2_VERSION, na:TABLA_ARMADO2.na, filas}; saveTablaArmado2();
     bg.remove(); toast('Tarifado de Armado guardado.');
     render();
   };
@@ -2487,16 +2502,19 @@ function abrirMantenedorArmado2(){
 /* ---------- Mantenedor: Cortado por medida (editable) ---------- */
 const KEY_TABLA_CORTADO2='taller_gary_tabla_cortado2_v1';
 function seedTablaCortado2(){
-  // Transcrito de "LISTADO M.O. CONFECCION.xlsx" (columna CORTADO)
-  return {filas:[
-    {ancho:0.30,alto:0.20,valor:400},{ancho:0.60,alto:0.40,valor:700},{ancho:0.76,alto:0.61,valor:700},
-    {ancho:0.80,alto:0.54,valor:800},{ancho:1.00,alto:0.66,valor:800},{ancho:1.20,alto:0.80,valor:900},
-    {ancho:1.22,alto:1.00,valor:900},{ancho:1.28,alto:0.84,valor:900},{ancho:1.50,alto:1.00,valor:1000},
-    {ancho:1.70,alto:1.12,valor:1000},{ancho:1.80,alto:1.20,valor:1000},{ancho:2.10,alto:1.40,valor:1100},
-    {ancho:2.25,alto:1.50,valor:1100},{ancho:2.55,alto:1.70,valor:1200},{ancho:2.70,alto:1.80,valor:1200},
-    {ancho:3.00,alto:2.00,valor:1200},{ancho:3.55,alto:2.33,valor:1250},{ancho:4.00,alto:2.66,valor:1300},
+  // Tarifado entregado por el usuario para el módulo de pruebas — "Corte Esteban"
+  return {v:TARIFADO2_VERSION, na:500, filas:[
+    {ancho:0.30,alto:0.20,valor:400},{ancho:0.60,alto:0.40,valor:700},{ancho:0.70,alto:0.46,valor:700},
+    {ancho:0.90,alto:0.66,valor:800},{ancho:1.00,alto:0.66,valor:800},{ancho:1.00,alto:0.70,valor:700},
+    {ancho:1.20,alto:0.76,valor:900},{ancho:1.20,alto:0.80,valor:900},{ancho:1.35,alto:0.90,valor:900},
+    {ancho:1.40,alto:0.90,valor:1000},{ancho:1.40,alto:1.40,valor:700},{ancho:1.50,alto:1.00,valor:1000},
+    {ancho:1.70,alto:1.12,valor:1000},{ancho:1.80,alto:1.00,valor:1000},{ancho:1.80,alto:1.20,valor:1000},
+    {ancho:12.00,alto:8.00,valor:20000},{ancho:13.50,alto:9.00,valor:14000},{ancho:18.00,alto:12.00,valor:30000},
+    {ancho:2.00,alto:1.33,valor:900},{ancho:2.10,alto:1.40,valor:1100},{ancho:2.25,alto:1.00,valor:1100},
+    {ancho:2.25,alto:1.50,valor:1100},{ancho:2.55,alto:1.70,valor:1200},{ancho:3.00,alto:2.00,valor:1200},
+    {ancho:3.40,alto:1.50,valor:800},{ancho:3.60,alto:2.40,valor:1250},{ancho:4.00,alto:2.66,valor:1300},
     {ancho:4.50,alto:3.00,valor:1300},{ancho:5.00,alto:3.33,valor:1400},{ancho:6.00,alto:4.00,valor:1680},
-    {ancho:7.00,alto:4.66,valor:1680},
+    {ancho:8.00,alto:5.33,valor:2340},{ancho:9.00,alto:6.00,valor:3000},
   ]};
 }
 // Medidas nuevas detectadas en "Trabajos operarios Gary" (registro real de Esteban Moscoso, Corte) que no
@@ -2508,15 +2526,17 @@ function fusionarMedidasNuevas(filas, nuevas){
 }
 function loadTablaCortado2(){
   let data;
-  try{ const raw=localStorage.getItem(KEY_TABLA_CORTADO2); data = raw? JSON.parse(raw) : seedTablaCortado2(); }
-  catch(e){ console.error(e); data = seedTablaCortado2(); }
+  try{ const raw=localStorage.getItem(KEY_TABLA_CORTADO2); data = raw? JSON.parse(raw) : null; }
+  catch(e){ console.error(e); data = null; }
+  if(!data || data.v!==TARIFADO2_VERSION) data = seedTablaCortado2();
   data.filas = fusionarMedidasNuevas(data.filas||[], CORTADO_MEDIDAS_NUEVAS);
   return data;
 }
 function saveTablaCortado2(){ localStorage.setItem(KEY_TABLA_CORTADO2, JSON.stringify(TABLA_CORTADO2)); }
 let TABLA_CORTADO2 = loadTablaCortado2();
 function cortadoPorMedida2(ancho, alto){
-  return buscarPorMedidaTolerante(TABLA_CORTADO2.filas||[], 'valor', ancho, alto);
+  const v=buscarPorMedidaTolerante(TABLA_CORTADO2.filas||[], 'valor', ancho, alto);
+  return v || TABLA_CORTADO2.na || 0;
 }
 function filaTablaCortadoHTML2(f){
   return `<div class="argollas-fila">
@@ -2554,7 +2574,7 @@ function abrirMantenedorCortado2(){
       alto:parseNumCL(r.querySelector('.tc-alto').value),
       valor:+r.querySelector('.tc-valor').value||0,
     }));
-    TABLA_CORTADO2={filas}; saveTablaCortado2();
+    TABLA_CORTADO2={v:TARIFADO2_VERSION, na:TABLA_CORTADO2.na, filas}; saveTablaCortado2();
     bg.remove(); toast('Tarifado de Cortado guardado.');
     render();
   };
@@ -2562,24 +2582,23 @@ function abrirMantenedorCortado2(){
 /* ---------- Mantenedor: Estrella por medida (editable) ---------- */
 const KEY_TABLA_ESTRELLA2='taller_gary_tabla_estrella2_v1';
 function seedTablaEstrella2(){
-  // Transcrito de "LISTADO M.O. CONFECCION.xlsx" (columna ESTRELLA)
-  return {filas:[
-    {ancho:0.30,alto:0.20,valor:330},{ancho:0.60,alto:0.40,valor:550},{ancho:0.76,alto:0.61,valor:600},
-    {ancho:0.80,alto:0.54,valor:650},{ancho:1.00,alto:0.66,valor:800},{ancho:1.20,alto:0.80,valor:900},
-    {ancho:1.22,alto:1.00,valor:600},{ancho:1.28,alto:0.84,valor:770},{ancho:1.50,alto:1.00,valor:990},
-    {ancho:1.70,alto:1.12,valor:990},{ancho:1.80,alto:1.20,valor:990},{ancho:2.10,alto:1.40,valor:1000},
-    {ancho:2.25,alto:1.50,valor:1020},{ancho:2.55,alto:1.70,valor:1020},{ancho:2.70,alto:1.80,valor:1100},
-    {ancho:3.00,alto:2.00,valor:1300},{ancho:3.55,alto:2.33,valor:1309},{ancho:4.00,alto:2.66,valor:1309},
-    {ancho:4.50,alto:3.00,valor:1870},{ancho:5.00,alto:3.33,valor:1870},{ancho:6.00,alto:4.00,valor:2860},
-    {ancho:7.00,alto:4.66,valor:5000},
+  // Tarifado entregado por el usuario para el módulo de pruebas — "Estrellas Ana"
+  return {v:TARIFADO2_VERSION, filas:[
+    {ancho:0.60,alto:0.40,valor:550},{ancho:0.70,alto:0.46,valor:600},{ancho:0.80,alto:0.54,valor:650},
+    {ancho:1.00,alto:0.66,valor:700},{ancho:1.20,alto:0.80,valor:770},{ancho:1.28,alto:0.84,valor:770},
+    {ancho:1.50,alto:1.00,valor:990},{ancho:1.80,alto:1.20,valor:990},{ancho:13.50,alto:9.00,valor:12000},
+    {ancho:2.25,alto:1.50,valor:1020},{ancho:2.55,alto:1.70,valor:1020},{ancho:3.00,alto:2.00,valor:1300},
+    {ancho:4.00,alto:2.66,valor:1309},{ancho:4.50,alto:3.00,valor:1870},{ancho:5.00,alto:3.33,valor:1870},
+    {ancho:6.00,alto:4.00,valor:2860},{ancho:8.00,alto:5.33,valor:5700},{ancho:9.00,alto:6.00,valor:7000},
   ]};
 }
 // Medidas nuevas detectadas en "Trabajos operarios Gary" (registro real de Ana Rivera, Estrellas) que no
 // estaban en el tarifado oficial. Se fusionan solas, sin pisar medidas que ya existan en la tabla.
 function loadTablaEstrella2(){
   let data;
-  try{ const raw=localStorage.getItem(KEY_TABLA_ESTRELLA2); data = raw? JSON.parse(raw) : seedTablaEstrella2(); }
-  catch(e){ console.error(e); data = seedTablaEstrella2(); }
+  try{ const raw=localStorage.getItem(KEY_TABLA_ESTRELLA2); data = raw? JSON.parse(raw) : null; }
+  catch(e){ console.error(e); data = null; }
+  if(!data || data.v!==TARIFADO2_VERSION) data = seedTablaEstrella2();
   data.filas = fusionarMedidasNuevas(data.filas||[], ESTRELLA_MEDIDAS_NUEVAS);
   return data;
 }
@@ -2624,8 +2643,72 @@ function abrirMantenedorEstrella2(){
       alto:parseNumCL(r.querySelector('.te-alto').value),
       valor:+r.querySelector('.te-valor').value||0,
     }));
-    TABLA_ESTRELLA2={filas}; saveTablaEstrella2();
+    TABLA_ESTRELLA2={v:TARIFADO2_VERSION, filas}; saveTablaEstrella2();
     bg.remove(); toast('Tarifado de Festoneado guardado.');
+    render();
+  };
+}
+/* ---------- Mantenedor: Otros conceptos de tarifado (no van por medida ancho x alto) ---------- */
+const KEY_TABLA_OTROS2='taller_gary_tabla_otros2_v1';
+function seedTablaOtros2(){
+  // Conceptos del tarifado entregado por el usuario que no calzan con el modelo Ancho x Alto:
+  // se cobran por minuto, o son un valor fijo (NA = no depende de la medida).
+  return {v:TARIFADO2_VERSION, filas:[
+    {concepto:'Armado Ana/Diana/Fernando — 1 Metro', unidad:'', valor:1200},
+    {concepto:'Calandra', unidad:'minuto', valor:70},
+    {concepto:'Postura de vaina', unidad:'', valor:330},
+    {concepto:'Postura driza', unidad:'', valor:220},
+    {concepto:'Calandra y Plotter', unidad:'minuto', valor:70},
+  ]};
+}
+function loadTablaOtros2(){
+  try{ const raw=localStorage.getItem(KEY_TABLA_OTROS2); if(raw){ const data=JSON.parse(raw); if(data.v===TARIFADO2_VERSION) return data; } }catch(e){ console.error(e); }
+  return seedTablaOtros2();
+}
+function saveTablaOtros2(){ localStorage.setItem(KEY_TABLA_OTROS2, JSON.stringify(TABLA_OTROS2)); }
+let TABLA_OTROS2 = loadTablaOtros2();
+function otroValor2(concepto){
+  const f=(TABLA_OTROS2.filas||[]).find(x=>x.concepto===concepto);
+  return f? f.valor : 0;
+}
+function filaTablaOtrosHTML2(f,i){
+  return `<div class="argollas-fila">
+    <input class="to-concepto" type="text" value="${esc(f.concepto)}" style="flex:2">
+    <input class="to-unidad" type="text" value="${esc(f.unidad||'')}" placeholder="ej: minuto">
+    <input class="to-valor" type="number" min="0" step="1" value="${f.valor}">
+    <button class="to-del" type="button" title="Eliminar fila">✕</button>
+  </div>`;
+}
+function abrirMantenedorOtros2(){
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box wide">
+    <div class="row between"><h2 style="margin:0">Tarifado — Otros conceptos</h2><button class="btn ghost sm" id="toClose" type="button">Cerrar</button></div>
+    <div class="muted" style="font-size:12px;margin:6px 0 10px">Editable. Conceptos que no se cobran por medida Ancho x Alto (por minuto, o un valor fijo).</div>
+    <div class="argollas-head"><div>Concepto</div><div>Unidad</div><div>Valor ($)</div><div></div></div>
+    <div id="otrosWrap" style="overflow-y:auto;max-height:44vh">${TABLA_OTROS2.filas.map(filaTablaOtrosHTML2).join('')}</div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost sm" id="toAdd" type="button">+ Agregar fila</button>
+      <span class="grow"></span>
+      <button class="btn" id="toSave" type="button">Guardar tarifado</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  const wrap=bg.querySelector('#otrosWrap');
+  bg.querySelector('#toClose').onclick=()=>bg.remove();
+  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove();
+    if(e.target.classList.contains('to-del')) e.target.closest('.argollas-fila').remove(); });
+  bg.querySelector('#toAdd').onclick=()=>{
+    const div=document.createElement('div'); div.innerHTML=filaTablaOtrosHTML2({concepto:'',unidad:'',valor:0});
+    wrap.appendChild(div.firstElementChild);
+  };
+  bg.querySelector('#toSave').onclick=()=>{
+    const filas=[...wrap.querySelectorAll('.argollas-fila')].map(r=>({
+      concepto:r.querySelector('.to-concepto').value.trim(),
+      unidad:r.querySelector('.to-unidad').value.trim(),
+      valor:+r.querySelector('.to-valor').value||0,
+    }));
+    TABLA_OTROS2={v:TARIFADO2_VERSION, filas}; saveTablaOtros2();
+    bg.remove(); toast('Tarifado de Otros conceptos guardado.');
     render();
   };
 }
