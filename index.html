@@ -173,6 +173,9 @@
   .insumo-cant-input{width:38px;padding:2px 3px;font-size:11px;text-align:right}
   .insumo-costo{padding:4px 6px;font-size:12px;text-align:right}
   .insumo-total{font-size:12.5px;font-weight:700;text-align:right}
+  .insumos-total-badge{flex:0 0 auto;white-space:nowrap;font-size:12px;color:var(--muted);background:var(--gold-soft);
+    border-radius:8px;padding:5px 9px}
+  .insumos-total-badge b{color:var(--gold-d)}
 
   /* ---------- Galería de fotos ---------- */
   .gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;overflow-y:auto;padding-right:4px}
@@ -3302,7 +3305,7 @@ function itemCardHTML2(it, i){
     <div class="row item-top-row" style="align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">
       <h2 style="margin:0;flex:0 0 auto;white-space:nowrap;font-family:Georgia,'Times New Roman',serif;font-size:16px;color:var(--ink)">Ítem ${i+1}</h2>
       <button class="btn danger sm del-item" type="button" title="Eliminar ítem" style="flex:0 0 auto;padding:4px 8px">✕</button>
-      <input class="ci-tipo" style="flex:1 1 auto;min-width:60px" value="${esc(it.tipo)}" placeholder="Nombre de la bandera">
+      <textarea class="ci-tipo" rows="2" style="flex:0 0 100px;width:100px;resize:none;font-size:12px;line-height:1.25;padding:5px 7px" placeholder="Nombre de la bandera">${esc(it.tipo)}</textarea>
       <div class="foto-box foto-box-mini" style="margin:0;flex:0 0 auto">
         <div class="foto-preview" tabindex="0" title="${it.foto?'Apreta para quitar la foto':'Apreta para subir una foto (o arrastra/pega una)'}">${it.foto?`<img src="${esc(it.foto)}">`:`<div class="foto-empty">📷</div>`}</div>
         <input type="file" accept="image/*" class="foto-file" style="display:none">
@@ -3315,6 +3318,7 @@ function itemCardHTML2(it, i){
       </select>
       <select class="ci-tipotela" style="flex:0 0 140px;width:140px" title="Tela">${TIPOS_TELA2.map(tl=>`<option ${((it.tipoTela||'Bistrech')===tl)?'selected':''}>${tl}</option>`).join('')}</select>
       <button class="btn ghost sm insumos-toggle" type="button">▾ Insumos</button>
+      <div class="insumos-total-badge">Insumos: <b class="ins-total-badge">${money(calcularInsumos2(it).subtotalInsumos)}</b></div>
       ${insumosPanelHTML2(it)}
     </div>
     </div>
@@ -3398,6 +3402,7 @@ function recalcCardDetalle2(card){
   card.querySelector('.ci-argollaextra').disabled=!r.esHuincha;
   card.querySelector('.ci-argollacosto').disabled=!r.esHuincha;
   card.querySelector('.ins-subtotal').textContent=money(r.subtotalInsumos);
+  card.querySelector('.ins-total-badge').textContent=money(r.subtotalInsumos);
 }
 function recalcTotalesDetalle2(){
   const items=leerItemsDesdeDOM2();
