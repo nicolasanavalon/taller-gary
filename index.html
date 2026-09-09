@@ -3060,6 +3060,50 @@ const TIPOS_TELA2=['Bistrech','Raso','Raso Doble','Raso Doble Faz','Raso Bordado
 function medidasDisponibles2(){
   return (TABLA_ARMADO2.filas||[]).map(f=>`${formatNumCL(f.ancho,2)} x ${formatNumCL(f.alto,2)}`);
 }
+/* "1,22 x 1,00" -> {ancho:1.22, alto:1.00}. Si no hay medida seleccionada, ambos quedan en 0. */
+function parseMedida2(medida){
+  if(!medida) return {ancho:0, alto:0};
+  const partes=medida.split('x').map(s=>parseNumCL(s.trim()));
+  return {ancho:partes[0]||0, alto:partes[1]||0};
+}
+/* ---------- Insumos (Tela, Estrella, V. Lona/H. Poliéster, Argollas) ----------
+   Panel colapsable junto al selector de Tela. La cantidad de Tela/Estrella sale de la
+   medida (fórmula de siempre); Argollas sale del Tarifado de Armado por medida; todo
+   queda editable a mano igual que en el resto del sistema. */
+function calcularInsumos2(it){
+  const {ancho,alto}=parseMedida2(it.medida);
+  const telaCantExacta=(alto&&ancho)?((alto*ancho)/1.4)*1.2:0;
+  const telaCant=redondear1(telaCantExacta);
+  const telaCosto=it.telaCosto!=null && it.telaCosto!=='' ? +it.telaCosto : 730;
+  const telaSubtotal=telaCantExacta*telaCosto;
+
+  const numEstrellas=it.numEstrellas!=null && it.numEstrellas!=='' ? +it.numEstrellas : 1;
+  const creaCantDefault=redondear4((telaCantExacta/12)*numEstrellas);
+  const creaCant=it.creaCant!=null && it.creaCant!=='' ? +it.creaCant : creaCantDefault;
+  const creaCosto=it.creaCosto!=null && it.creaCosto!=='' ? +it.creaCosto : 730;
+  const creaSubtotal=creaCant*creaCosto;
+
+  const tipoVaina=it.tipoVaina||'Vaina de Lona';
+  const esHuincha=tipoVaina==='Huincha de poliéster';
+  const vainaCosto=it.vainaCosto!=null && it.vainaCosto!=='' ? +it.vainaCosto : otroValor2('Postura de vaina');
+  const huinchaCantExacta=esHuincha?(alto*2+0.10):0;
+  const huinchaCant=redondear1(huinchaCantExacta);
+  const huinchaCosto=it.huinchaCosto!=null && it.huinchaCosto!=='' ? +it.huinchaCosto : 250;
+  const huinchaSubtotal=esHuincha? huinchaCantExacta*huinchaCosto : vainaCosto;
+
+  const argollasBase=esHuincha? argollasPorMedida2(ancho,alto) : 0;
+  const argollaExtra=+it.argollaExtra||0;
+  const argollasCant=argollasBase+argollaExtra;
+  const argollaCosto=it.argollaCosto!=null && it.argollaCosto!=='' ? +it.argollaCosto : 200;
+  const argollaSubtotal=esHuincha? argollasCant*argollaCosto : 0;
+
+  const subtotalInsumos=telaSubtotal+creaSubtotal+huinchaSubtotal+argollaSubtotal;
+  return {ancho,alto,telaCant,telaCantExacta,telaCosto,telaSubtotal,
+    numEstrellas,creaCant,creaCosto,creaSubtotal,
+    tipoVaina,esHuincha,vainaCosto,huinchaCant,huinchaCantExacta,huinchaCosto,huinchaSubtotal,
+    argollasBase,argollaExtra,argollasCant,argollaCosto,argollaSubtotal,
+    subtotalInsumos};
+}
 /* ---------- Motor de costeo por ítem (materiales/procesos + flete + financiero/imprevisto + margen + IVA) ---------- */
 function itemNuevo2(){
   return {
@@ -3197,6 +3241,46 @@ function headerBlockHTML2(it, i){
       <button class="btn danger sm del-item" title="Eliminar ítem">✕ Eliminar ítem</button>
     </div>`;
 }
+function insumosPanelHTML2(it){
+  const r=calcularInsumos2(it);
+  return `<div class="insumos-panel" style="display:none;margin:2px 0 8px">
+    <div class="section-title" style="margin:10px 0 8px">Insumos</div>
+    <div class="tela-costeo-head"><div>Concepto</div><div>Cantidad</div><div>Costo unit.</div><div class="right">Total</div></div>
+    <div class="tela-costeo-row">
+      <div>Tela</div>
+      <div><span class="ins-tela-cant">${formatNumCL(r.telaCant,1)}</span> <span class="unidad">m</span></div>
+      <input class="ci-telacosto" type="number" step="1" value="${r.telaCosto}">
+      <div class="ins-tela-subtotal right">${money(r.telaSubtotal)}</div>
+    </div>
+    <div class="tela-costeo-row">
+      <div>Estrella</div>
+      <div class="argolla-cant-cell"><input class="ci-creacant" type="number" min="0" step="0.1" value="${r.creaCant}"> <span class="unidad">m</span></div>
+      <input class="ci-creacosto" type="number" step="1" value="${r.creaCosto}">
+      <div class="ins-crea-subtotal right">${money(r.creaSubtotal)}</div>
+    </div>
+    <div class="tela-costeo-row">
+      <div>
+        <select class="ci-tipovaina" style="width:auto;padding:4px 6px;font-size:12px">${TIPOS_VAINA.map(tv=>`<option ${r.tipoVaina===tv?'selected':''}>${tv}</option>`).join('')}</select>
+      </div>
+      <div class="argolla-cant-cell"><span class="ins-huincha-cant">${r.esHuincha?formatNumCL(r.huinchaCant,1):'—'}</span> <span class="unidad">${r.esHuincha?'m':''}</span></div>
+      <input class="ci-huinchacosto" type="number" step="1" value="${r.esHuincha?r.huinchaCosto:r.vainaCosto}">
+      <div class="ins-huincha-subtotal right">${money(r.huinchaSubtotal)}</div>
+    </div>
+    <div class="tela-costeo-row">
+      <div>Argollas ${r.esHuincha?'':'<span class="muted">(no aplica: vaina de lona)</span>'}</div>
+      <div class="argolla-cant-cell">
+        <span class="ins-argollas-base">${r.argollasBase}</span><span class="muted">+</span>
+        <input class="ci-argollaextra" type="number" step="1" value="${it.argollaExtra||0}" title="Argolla extra (puede ser negativa para restar)" ${r.esHuincha?'':'disabled'}> <span class="unidad">un.</span>
+      </div>
+      <input class="ci-argollacosto" type="number" step="1" value="${r.argollaCosto}" ${r.esHuincha?'':'disabled'}>
+      <div class="ins-argolla-subtotal right">${money(r.argollaSubtotal)}</div>
+    </div>
+    <div class="tela-costeo-row subtotal">
+      <div>Subtotal insumos</div><div></div><div></div>
+      <div class="ins-subtotal right">${money(r.subtotalInsumos)}</div>
+    </div>
+  </div>`;
+}
 function itemCardHTML2(it, i){
   const medidas=medidasDisponibles2();
   return `<div class="panel item-card" data-idx="${i}">
@@ -3215,7 +3299,9 @@ function itemCardHTML2(it, i){
         ${medidas.map(m=>`<option ${it.medida===m?'selected':''}>${m}</option>`).join('')}
       </select>
       <select class="ci-tipotela" style="flex:0 0 auto;width:auto" title="Tela">${TIPOS_TELA2.map(tl=>`<option ${((it.tipoTela||'Bistrech')===tl)?'selected':''}>${tl}</option>`).join('')}</select>
+      <button class="btn ghost sm insumos-toggle" type="button">▾ Insumos</button>
     </div>
+    ${insumosPanelHTML2(it)}
     </div>
   </div>`;
 }
@@ -3267,23 +3353,41 @@ function renderDetalleCotizacion2(c){
     </div>`;
 }
 function leerItemDeCard2(card){
-  // El ítem por ahora tiene Nombre, Foto, Tipo de producto, Medidas y Tela — se irán
-  // agregando más campos acá a medida que se vayan sumando de vuelta a la tarjeta.
+  const esHuinchaAhora=card.querySelector('.ci-tipovaina').value==='Huincha de poliéster';
   return {
     tipo:card.querySelector('.ci-tipo').value.trim(),
     foto:card.querySelector('.ci-foto').value||'',
     tipoProducto:card.querySelector('.ci-tipoproducto').value,
     medida:card.querySelector('.ci-medida').value,
     tipoTela:card.querySelector('.ci-tipotela').value,
+    telaCosto:card.querySelector('.ci-telacosto').value,
+    creaCant:card.querySelector('.ci-creacant').value,
+    creaCosto:card.querySelector('.ci-creacosto').value,
+    tipoVaina:card.querySelector('.ci-tipovaina').value,
+    huinchaCosto:esHuinchaAhora? card.querySelector('.ci-huinchacosto').value : undefined,
+    vainaCosto:esHuinchaAhora? undefined : card.querySelector('.ci-huinchacosto').value,
+    argollaCosto:card.querySelector('.ci-argollacosto').value,
+    argollaExtra:+card.querySelector('.ci-argollaextra').value||0,
   };
 }
 function leerItemsDesdeDOM2(){
   return [...document.querySelectorAll('#itemsCot .item-card')].map(leerItemDeCard2);
 }
 function recalcCardDetalle2(card){
-  // El ítem por ahora solo tiene Nombre y Tipo de producto — no hay nada que
-  // recalcular todavía. Se va a ir completando junto con itemCardHTML2/leerItemDeCard2
-  // a medida que se agreguen de vuelta los campos de costeo.
+  const wrap=$('#itemsCot'); if(!wrap) return;
+  const it=leerItemsDesdeDOM2()[[...wrap.children].indexOf(card)];
+  if(!it) return;
+  const r=calcularInsumos2(it);
+  card.querySelector('.ins-tela-cant').textContent=formatNumCL(r.telaCant,1);
+  card.querySelector('.ins-tela-subtotal').textContent=money(r.telaSubtotal);
+  card.querySelector('.ins-crea-subtotal').textContent=money(r.creaSubtotal);
+  card.querySelector('.ins-huincha-cant').textContent=r.esHuincha?formatNumCL(r.huinchaCant,1):'—';
+  card.querySelector('.ins-huincha-subtotal').textContent=money(r.huinchaSubtotal);
+  card.querySelector('.ins-argollas-base').textContent=r.argollasBase;
+  card.querySelector('.ins-argolla-subtotal').textContent=money(r.argollaSubtotal);
+  card.querySelector('.ci-argollaextra').disabled=!r.esHuincha;
+  card.querySelector('.ci-argollacosto').disabled=!r.esHuincha;
+  card.querySelector('.ins-subtotal').textContent=money(r.subtotalInsumos);
 }
 function recalcTotalesDetalle2(){
   const items=leerItemsDesdeDOM2();
@@ -3364,12 +3468,20 @@ function bindDetalleCotizacion2(){
   wrap.addEventListener('change', e=>{
     const card=e.target.closest('.item-card'); if(!card) return;
     marcarSucia2();
-    if(e.target.classList.contains('ci-tipovaina')||e.target.classList.contains('ci-tipoacabado')){
+    if(e.target.classList.contains('ci-tipovaina')){
       const idx=[...wrap.children].indexOf(card);
       const it=leerItemDeCard2(card);
-      if(e.target.classList.contains('ci-tipoacabado')){ delete it.creaCant; it.numEstrellas=1; } // recalcula la Estrella con la fórmula fresca, no arrastra el valor viejo
+      // Al cambiar de Vaina de Lona <-> Huincha de poliéster, el costo vuelve a su valor
+      // por defecto de cada uno (no arrastra el número que se veía en el otro modo).
+      delete it.huinchaCosto; delete it.vainaCosto; delete it.argollaCosto;
+      const panelAbierto=card.querySelector('.insumos-panel').style.display!=='none';
       const div=document.createElement('div'); div.innerHTML=itemCardHTML2(it, idx);
-      wrap.replaceChild(div.firstElementChild, card);
+      const nuevaCard=div.firstElementChild;
+      if(panelAbierto){
+        const p=nuevaCard.querySelector('.insumos-panel'); p.style.display='block';
+        nuevaCard.querySelector('.insumos-toggle').textContent='▴ Insumos';
+      }
+      wrap.replaceChild(nuevaCard, card);
       if(headersTrack && headersTrack.children[idx]){
         const divH=document.createElement('div'); divH.innerHTML=headerBlockHTML2(it, idx);
         headersTrack.replaceChild(divH.firstElementChild, headersTrack.children[idx]);
@@ -3442,6 +3554,12 @@ function bindDetalleCotizacion2(){
       const tieneFoto=!!card.querySelector('.ci-foto').value;
       if(tieneFoto){ marcarSucia2(); aplicarFotoACard2(card, ''); }
       else { card.querySelector('.foto-file').click(); }
+    }
+    else if(e.target.classList.contains('insumos-toggle')){
+      const panel=card.querySelector('.insumos-panel');
+      const abrir=panel.style.display==='none';
+      panel.style.display=abrir?'block':'none';
+      e.target.textContent=(abrir?'▴':'▾')+' Insumos';
     }
   });
   wrap.addEventListener('focusout', e=>{
