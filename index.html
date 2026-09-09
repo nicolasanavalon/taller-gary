@@ -438,6 +438,10 @@
     overflow-x:auto;padding-bottom:12px}
   #itemsCot .item-card{flex:0 0 640px;width:640px;margin-bottom:0}
   @media(max-width:760px){#itemsCot .item-card{flex-basis:88vw;width:88vw}}
+  /* Costos y Cotizaciones 2 (módulo de pruebas): los ítems van uno debajo del otro,
+     usando todo el ancho disponible — no lado a lado como en el módulo real. */
+  #itemsCot2{display:flex;flex-direction:column;gap:16px}
+  #itemsCot2 .item-card{width:100%;margin-bottom:0}
   .del-item{background:linear-gradient(180deg,#e0665a,#d4483d);border:none;color:#fff;border-radius:9px;
     cursor:pointer;font-size:13px}
   .cost-summary{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:7px}
@@ -3297,6 +3301,7 @@ function itemCardHTML2(it, i){
     <div class="item-body">
     <div class="row item-top-row" style="align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">
       <h2 style="margin:0;flex:0 0 auto;white-space:nowrap;font-family:Georgia,'Times New Roman',serif;font-size:16px;color:var(--ink)">Ítem ${i+1}</h2>
+      <button class="btn danger sm del-item" type="button" title="Eliminar ítem" style="flex:0 0 auto;padding:4px 8px">✕</button>
       <input class="ci-tipo" style="flex:1 1 auto;min-width:60px" value="${esc(it.tipo)}" placeholder="Nombre de la bandera">
       <div class="foto-box foto-box-mini" style="margin:0;flex:0 0 auto">
         <div class="foto-preview" tabindex="0" title="${it.foto?'Apreta para quitar la foto':'Apreta para subir una foto (o arrastra/pega una)'}">${it.foto?`<img src="${esc(it.foto)}">`:`<div class="foto-empty">📷</div>`}</div>
@@ -3337,15 +3342,10 @@ function renderDetalleCotizacion2(c){
       </div>
     </div>
 
-    <div id="itemsHeadersBar">
-      <div class="items-headers-bar full-bleed">
-        <div class="items-headers-track" id="itemsHeadersTrack">${items.map((it,i)=>headerBlockHTML2(it,i)).join('')}</div>
-      </div>
-    </div>
-    <div id="itemsCot" class="full-bleed">${items.map((it,i)=>itemCardHTML2(it,i)).join('')}</div>
+    <div id="itemsCot2" class="full-bleed">${items.map((it,i)=>itemCardHTML2(it,i)).join('')}</div>
     <div class="full-bleed">
       <div class="row" style="margin-top:16px">
-        <button class="btn ghost sm" id="addItemCot">+ Agregar ítem</button>
+        <button class="btn ghost sm" id="addItemCot2">+ Agregar ítem</button>
       </div>
 
       <div class="panel" style="margin-top:16px">
@@ -3381,10 +3381,10 @@ function leerItemDeCard2(card){
   };
 }
 function leerItemsDesdeDOM2(){
-  return [...document.querySelectorAll('#itemsCot .item-card')].map(leerItemDeCard2);
+  return [...document.querySelectorAll('#itemsCot2 .item-card')].map(leerItemDeCard2);
 }
 function recalcCardDetalle2(card){
-  const wrap=$('#itemsCot'); if(!wrap) return;
+  const wrap=$('#itemsCot2'); if(!wrap) return;
   const it=leerItemsDesdeDOM2()[[...wrap.children].indexOf(card)];
   if(!it) return;
   const r=calcularInsumos2(it);
@@ -3415,7 +3415,7 @@ function aplicarFotoACard2(card, dataUrl){
   const fp=card.querySelector('.foto-preview');
   fp.innerHTML = dataUrl? `<img src="${dataUrl}">` : `<div class="foto-empty">📷</div>`;
   fp.title = dataUrl? 'Apreta para quitar la foto' : 'Apreta para subir una foto (o arrastra/pega una)';
-  const wrap=$('#itemsCot'), track=$('#itemsHeadersTrack');
+  const wrap=$('#itemsCot2'), track=$('#itemsHeadersTrack2');
   if(wrap && track){
     const idx=[...wrap.children].indexOf(card);
     const block=track.children[idx];
@@ -3452,13 +3452,13 @@ function abrirGaleriaFotos2(card){
   bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
 }
 function bindDetalleCotizacion2(){
-  const wrap=$('#itemsCot'); if(!wrap) return;
+  const wrap=$('#itemsCot2'); if(!wrap) return;
   const recalcCard=recalcCardDetalle2, recalcTotales=recalcTotalesDetalle2;
-  const headersTrack=$('#itemsHeadersTrack');
+  const headersTrack=$('#itemsHeadersTrack2');
   if(headersTrack){
     wrap.addEventListener('scroll', ()=>{ headersTrack.style.transform='translateX('+(-wrap.scrollLeft)+'px)'; }, {passive:true});
   }
-  const headersBar=$('#itemsHeadersBar');
+  const headersBar=$('#itemsHeadersBar2');
   if(headersBar) headersBar.addEventListener('click', e=>{
     const btn=e.target.closest('.del-item'); if(!btn) return;
     const block=btn.closest('.item-card-head'); if(!block) return;
@@ -3571,6 +3571,12 @@ function bindDetalleCotizacion2(){
       panel.classList.toggle('abierto', abrir);
       e.target.textContent=(abrir?'▴':'▾')+' Insumos';
     }
+    else if(e.target.classList.contains('del-item')){
+      if(wrap.children.length<=1){ toast('Debe quedar al menos un ítem.','error'); return; }
+      marcarSucia2();
+      card.remove();
+      recalcTotales();
+    }
   });
   wrap.addEventListener('focusout', e=>{
     const card=e.target.closest('.item-card'); if(!card) return;
@@ -3615,7 +3621,7 @@ function bindDetalleCotizacion2(){
       recalcCard(card); recalcTotales();
     }
   });
-  const addBtn=$('#addItemCot');
+  const addBtn=$('#addItemCot2');
   if(addBtn) addBtn.onclick=()=>{
     marcarSucia2();
     const idx=wrap.children.length;
@@ -3630,11 +3636,11 @@ function bindDetalleCotizacion2(){
     }
     wrap.scrollTo({left:wrap.scrollWidth, behavior:'smooth'});
   };
-  const buscarInput=$('#buscarAnteriorInput');
+  const buscarInput=$('#buscarAnteriorInput2');
   if(buscarInput) buscarInput.addEventListener('keydown', e=>{ if(e.key==='Enter') buscarItemsAnteriores2(); });
 }
 function buscarItemsAnteriores2(){
-  const q=normalizarNombre($('#buscarAnteriorInput').value);
+  const q=normalizarNombre($('#buscarAnteriorInput2').value);
   const resDiv=$('#resultadosAnteriores'); if(!resDiv) return;
   if(!q){ resDiv.innerHTML=''; return; }
   const resultados=[];
@@ -3687,7 +3693,7 @@ function copiarItemAnterior2(cotId, idx){
   const cot=COSTOS2.cotizaciones.find(x=>x.id===cotId); if(!cot) return;
   const src=cot.items[idx]; if(!src) return;
   const clone=JSON.parse(JSON.stringify(src));
-  const wrap=$('#itemsCot'); if(!wrap) return;
+  const wrap=$('#itemsCot2'); if(!wrap) return;
   const div=document.createElement('div');
   div.innerHTML=itemCardHTML2(clone, wrap.children.length);
   const nuevo=div.firstElementChild;
