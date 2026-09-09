@@ -163,7 +163,8 @@
 
   /* Panel "Insumos" (Costos y Cotizaciones 2): cada insumo es una columna angosta, todas
      en una sola fila (con scroll lateral propio si no calzan, sin romper el ancho del ítem). */
-  .insumos-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+  .insumos-panel{display:none;gap:8px;flex:0 0 auto}
+  .insumos-panel.abierto{display:flex}
   .insumo-col{flex:0 0 108px;width:108px;display:flex;flex-direction:column;gap:4px}
   .insumo-col-total{flex-basis:88px;width:88px}
   .insumo-titulo{font-size:11px;font-weight:700;color:var(--gold-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -3255,8 +3256,7 @@ function headerBlockHTML2(it, i){
 }
 function insumosPanelHTML2(it){
   const r=calcularInsumos2(it);
-  return `<div class="insumos-panel" style="display:none;margin:2px 0 8px">
-    <div class="insumos-row">
+  return `<div class="insumos-panel">
       <div class="insumo-col">
         <div class="insumo-titulo">Tela</div>
         <div class="insumo-cant"><span class="ins-tela-cant">${formatNumCL(r.telaCant,1)}</span> m</div>
@@ -3289,14 +3289,13 @@ function insumosPanelHTML2(it){
         <div class="insumo-cant">&nbsp;</div>
         <div class="insumo-total ins-subtotal">${money(r.subtotalInsumos)}</div>
       </div>
-    </div>
-  </div>`;
+    </div>`;
 }
 function itemCardHTML2(it, i){
   const medidas=medidasDisponibles2();
   return `<div class="panel item-card" data-idx="${i}">
     <div class="item-body">
-    <div class="row" style="align-items:center;gap:8px;flex-wrap:nowrap">
+    <div class="row item-top-row" style="align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">
       <h2 style="margin:0;flex:0 0 auto;white-space:nowrap;font-family:Georgia,'Times New Roman',serif;font-size:16px;color:var(--ink)">Ítem ${i+1}</h2>
       <input class="ci-tipo" style="flex:1 1 auto;min-width:60px" value="${esc(it.tipo)}" placeholder="Nombre de la bandera">
       <div class="foto-box foto-box-mini" style="margin:0;flex:0 0 auto">
@@ -3311,8 +3310,8 @@ function itemCardHTML2(it, i){
       </select>
       <select class="ci-tipotela" style="flex:0 0 auto;width:auto" title="Tela">${TIPOS_TELA2.map(tl=>`<option ${((it.tipoTela||'Bistrech')===tl)?'selected':''}>${tl}</option>`).join('')}</select>
       <button class="btn ghost sm insumos-toggle" type="button">▾ Insumos</button>
+      ${insumosPanelHTML2(it)}
     </div>
-    ${insumosPanelHTML2(it)}
     </div>
   </div>`;
 }
@@ -3485,11 +3484,11 @@ function bindDetalleCotizacion2(){
       // Al cambiar de Vaina de Lona <-> Huincha de poliéster, el costo vuelve a su valor
       // por defecto de cada uno (no arrastra el número que se veía en el otro modo).
       delete it.huinchaCosto; delete it.vainaCosto; delete it.argollaCosto;
-      const panelAbierto=card.querySelector('.insumos-panel').style.display!=='none';
+      const panelAbierto=card.querySelector('.insumos-panel').classList.contains('abierto');
       const div=document.createElement('div'); div.innerHTML=itemCardHTML2(it, idx);
       const nuevaCard=div.firstElementChild;
       if(panelAbierto){
-        const p=nuevaCard.querySelector('.insumos-panel'); p.style.display='block';
+        nuevaCard.querySelector('.insumos-panel').classList.add('abierto');
         nuevaCard.querySelector('.insumos-toggle').textContent='▴ Insumos';
       }
       wrap.replaceChild(nuevaCard, card);
@@ -3568,8 +3567,8 @@ function bindDetalleCotizacion2(){
     }
     else if(e.target.classList.contains('insumos-toggle')){
       const panel=card.querySelector('.insumos-panel');
-      const abrir=panel.style.display==='none';
-      panel.style.display=abrir?'block':'none';
+      const abrir=!panel.classList.contains('abierto');
+      panel.classList.toggle('abierto', abrir);
       e.target.textContent=(abrir?'▴':'▾')+' Insumos';
     }
   });
