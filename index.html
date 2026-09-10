@@ -408,6 +408,16 @@
   .grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px}
   .grid-tipo{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:12px}
   .grid-cant{display:grid;grid-template-columns:1fr 3fr;gap:12px}
+  /* Formulario "Datos del cliente" de Costos y Cotizaciones 2: más liviano — agrupado
+     en secciones cortas (Cliente/Contacto/Despacho) en vez de un solo bloque largo. */
+  .cf-panel .field{margin-bottom:0}
+  .cf-grid{display:grid;gap:10px 14px;margin-bottom:4px}
+  .cf-grid-3{grid-template-columns:repeat(3,1fr)}
+  .cf-span2{grid-column:span 2}
+  .cf-section{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;
+    color:var(--gold-d);margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--line)}
+  .cf-section:first-of-type{margin-top:10px;padding-top:0;border-top:none}
+  @media(max-width:640px){.cf-grid-3{grid-template-columns:1fr}.cf-span2{grid-column:span 1}}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .row.between{justify-content:space-between}
   .muted{color:var(--muted)}
@@ -3018,34 +3028,39 @@ function renderCostos2(m){
       </div>
     </div>
 
-    <div class="panel">
-      <h2>${editando?'Editando cotización '+esc(draftEditOrig2):'Datos del cliente — nueva cotización'}</h2>
-      <div class="grid2">
+    <div class="panel cf-panel">
+      <div class="row between" style="align-items:center;margin-bottom:2px">
+        <h2 style="margin:0;font-size:15px">${editando?'Editando cotización '+esc(draftEditOrig2):'Datos del cliente — nueva cotización'}</h2>
+        ${editando?`<span style="font-size:12px">${estadoBadge(draftCliente2.estado||'Pendiente')} <span class="muted">(el estado se cambia desde la tabla)</span></span>`:''}
+      </div>
+
+      <div class="cf-section">Cliente</div>
+      <div class="cf-grid cf-grid-3">
+        <div class="field"><label>Nombre / Institución</label><input id="cfEmpresa" value="${esc(draftCliente2.empresa)}" placeholder="Institución / empresa"></div>
+        <div class="field"><label>RUT</label><input id="cfRut" value="${esc(draftCliente2.rut)}" placeholder="12.345.678-9"></div>
         <div class="field"><label>ID cotización</label><input id="cfId" value="${esc(draftCliente2.id)}" placeholder="Ej: COT-2026-001"></div>
-        <div class="field"><label>Fecha</label><input type="date" id="cfFecha" value="${draftCliente2.fecha}"></div>
       </div>
-      ${editando?`<div class="row" style="margin-bottom:10px">Estado actual: ${estadoBadge(draftCliente2.estado||'Pendiente')} <span class="muted" style="font-size:12px">(se cambia con los botones de la tabla, no aquí)</span></div>`:''}
-      <div class="grid2">
-        <div class="field"><label>Nombre Cliente/Empresa</label><input id="cfEmpresa" value="${esc(draftCliente2.empresa)}" placeholder="Institución / empresa"></div>
-        <div class="field"><label>RUT Cliente/Empresa</label><input id="cfRut" value="${esc(draftCliente2.rut)}" placeholder="12.345.678-9"></div>
-      </div>
-      <div class="grid2">
+
+      <div class="cf-section">Contacto</div>
+      <div class="cf-grid cf-grid-3">
         <div class="field"><label>Nombre contacto</label><input id="cfContacto" value="${esc(draftCliente2.contacto)}" placeholder="Persona de contacto"></div>
-        <div class="field"><label>Mail contacto</label><input type="email" id="cfMail" value="${esc(draftCliente2.mail)}" placeholder="correo@ejemplo.cl"></div>
-      </div>
-      <div class="grid2">
+        <div class="field"><label>Mail</label><input type="email" id="cfMail" value="${esc(draftCliente2.mail)}" placeholder="correo@ejemplo.cl"></div>
         <div class="field"><label>Teléfono</label><input id="cfTelefono" value="${esc(draftCliente2.telefono)}" placeholder="+56 9 ..."></div>
-        <div class="field"><label>Teléfono 2 <span class="muted" style="font-weight:400">(opcional, otro contacto)</span></label><input id="cfTelefono2" value="${esc(draftCliente2.telefono2||'')}" placeholder="+56 9 ..."></div>
       </div>
-      <div class="field"><label>Dirección</label><input id="cfDireccion" value="${esc(draftCliente2.direccion)}" placeholder="Dirección de despacho / facturación"></div>
-      <div class="grid2">
+
+      <div class="cf-section">Despacho <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">y fecha</span></div>
+      <div class="cf-grid cf-grid-3">
+        <div class="field cf-span2"><label>Dirección</label><input id="cfDireccion" value="${esc(draftCliente2.direccion)}" placeholder="Dirección de despacho / facturación"></div>
+        <div class="field"><label>Fecha</label><input type="date" id="cfFecha" value="${draftCliente2.fecha}"></div>
         <div class="field"><label>Comuna</label><input id="cfComuna" value="${esc(draftCliente2.comuna||'')}" placeholder="Ej: Coronel"></div>
         <div class="field"><label>Región</label><select id="cfRegion">
           <option value="">Selecciona...</option>
           ${REGIONES_CHILE.map(r=>`<option ${draftCliente2.region===r?'selected':''}>${r}</option>`).join('')}
         </select></div>
+        <div class="field"><label>Teléfono 2 <span class="muted" style="font-weight:400">(opcional)</span></label><input id="cfTelefono2" value="${esc(draftCliente2.telefono2||'')}" placeholder="+56 9 ..."></div>
       </div>
-      <div class="row" style="justify-content:flex-end;margin-top:6px">
+
+      <div class="row" style="justify-content:flex-end;margin-top:8px">
         ${editando?`<button class="btn ghost sm" onclick="nuevoDraftCliente2();render()">Cancelar edición</button>`:''}
         <button class="btn sm" onclick="guardarCotizacionCliente2()">${editando?'Guardar cambios':'Guardar y crear cotización'}</button>
       </div>
