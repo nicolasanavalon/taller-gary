@@ -418,6 +418,10 @@
     color:var(--gold-d);margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--line)}
   .cf-section:first-of-type{margin-top:10px;padding-top:0;border-top:none}
   @media(max-width:640px){.cf-grid-3{grid-template-columns:1fr}.cf-span2{grid-column:span 1}}
+  .cf-panel-mini{cursor:pointer;transition:border-color .15s,background .15s}
+  .cf-panel-mini:hover{border-color:var(--gold);background:var(--gold-soft)}
+  .cf-minimizar{font-size:12px;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+  .cf-minimizar:hover{color:var(--gold-d)}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .row.between{justify-content:space-between}
   .muted{color:var(--muted)}
@@ -2951,6 +2955,7 @@ function restoreCostosFile2(input){
 
 let draftCliente2=null;
 let draftEditOrig2=null; // id original mientras se edita una cotización existente (null = es nueva)
+let cfFormAbierto2=false; // el formulario "Datos del cliente" parte minimizado; se abre al apretarlo
 let costosView2='lista'; // 'lista' | 'detalle'
 let detalleCotId2=null;
 function money(n){ n=Math.round(+n||0); const s=Math.abs(n).toLocaleString('es-CL'); return (n<0?'-$':'$')+s; }
@@ -2973,6 +2978,7 @@ function nuevoDraftCliente2(){
   draftCliente2 = { id:'', fecha:todayISO(), estado:'Pendiente', empresa:'', rut:'', contacto:'', mail:'', telefono:'', telefono2:'', direccion:'', comuna:'', region:'' };
   draftEditOrig2 = null;
   draftClienteSucio2 = false;
+  cfFormAbierto2 = false;
 }
 
 function estadoBadge(estado){
@@ -3028,10 +3034,12 @@ function renderCostos2(m){
       </div>
     </div>
 
+    ${(editando||cfFormAbierto2) ? `
     <div class="panel cf-panel">
       <div class="row between" style="align-items:center;margin-bottom:2px">
         <h2 style="margin:0;font-size:15px">${editando?'Editando cotización '+esc(draftEditOrig2):'Datos del cliente — nueva cotización'}</h2>
-        ${editando?`<span style="font-size:12px">${estadoBadge(draftCliente2.estado||'Pendiente')} <span class="muted">(el estado se cambia desde la tabla)</span></span>`:''}
+        ${editando?`<span style="font-size:12px">${estadoBadge(draftCliente2.estado||'Pendiente')} <span class="muted">(el estado se cambia desde la tabla)</span></span>`
+          :`<span class="cf-minimizar" onclick="cfFormAbierto2=false;render()">▴ Minimizar</span>`}
       </div>
 
       <div class="cf-section">Cliente</div>
@@ -3064,7 +3072,16 @@ function renderCostos2(m){
         ${editando?`<button class="btn ghost sm" onclick="nuevoDraftCliente2();render()">Cancelar edición</button>`:''}
         <button class="btn sm" onclick="guardarCotizacionCliente2()">${editando?'Guardar cambios':'Guardar y crear cotización'}</button>
       </div>
-    </div>
+    </div>` : `
+    <div class="panel cf-panel-mini" onclick="cfFormAbierto2=true;render()">
+      <div class="row between" style="align-items:center">
+        <div>
+          <h2 style="margin:0;font-size:15px">Datos del cliente — nueva cotización</h2>
+          <div class="muted" style="font-size:12px;margin-top:2px">Apreta para completarlos</div>
+        </div>
+        <span class="btn sm">+ Nueva cotización</span>
+      </div>
+    </div>`}
 
     <div class="panel">
       <h2>🟡 Cotizaciones pendientes (${pendientes.length})</h2>
@@ -3768,7 +3785,7 @@ function guardarCotizacionCliente2(){
 }
 function editarCotizacionCliente2(id){
   const c=COSTOS2.cotizaciones.find(x=>x.id===id); if(!c) return;
-  draftCliente2={...c}; draftEditOrig2=id; draftClienteSucio2=false; render(); window.scrollTo(0,0);
+  draftCliente2={...c}; draftEditOrig2=id; draftClienteSucio2=false; cfFormAbierto2=true; render(); window.scrollTo(0,0);
 }
 function eliminarCotizacionCliente2(id){
   confirmDialog('¿Eliminar la cotización '+id+'?', ()=>{
