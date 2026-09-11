@@ -2946,8 +2946,113 @@ function costosGuardarLocal2(){
 }
 function saveCostos2(){
   costosGuardarLocal2();
+  costos2SyncEstado='guardando'; costos2ActualizarPildoraSync();
+  clearTimeout(costos2SyncTimer);
+  costos2SyncTimer=setTimeout(costos2EnviarNube, 900);
 }
 let COSTOS2 = loadCostos2();
+
+/* ---------- Sincronización en la nube de Costos y Cotizaciones 2 (mismo patrón que Costos y Cotizaciones) ---------- */
+const COSTOS2_SYNC_URL='https://script.google.com/macros/s/AKfycbwJheJdyHpKOhPj_423DoYaoJ7tmAu6dTCE_8OiJWc0D0wK6naRKx7Wg8tg_tfQrf2rUg/exec';
+let costos2SyncTimer=null;
+let costos2SyncPoll=null;
+/* 'cargando' | 'guardando' | 'nube' | 'nube-error' */
+let costos2SyncEstado='cargando';
+let costos2SyncDetalle='';
+function costos2ActualizarPildoraSync(){
+  const el=document.getElementById('costos2SyncPill');
+  if(!el) return;
+  const txt={ cargando:'☁️ Conectando…', guardando:'💾 Guardando…', nube:'☁️ Sincronizado', 'nube-error':'⚠️ Error: '+costos2SyncDetalle }[costos2SyncEstado];
+  el.textContent=txt;
+  el.className='pill prod-cloud-pill '+costos2SyncEstado;
+}
+let costos2Enviando=false;
+let costos2EnviarPendiente=false;
+async function costos2EnviarNube(){
+  costos2SyncTimer=null;
+  if(costos2Enviando){ costos2EnviarPendiente=true; costos2SyncEstado='guardando'; costos2ActualizarPildoraSync(); return; }
+  costos2Enviando=true;
+  costos2SyncEstado='guardando'; costos2ActualizarPildoraSync();
+  let ok=false, ultimoError=null, conflicto=null;
+  for(let intento=0; intento<3 && !ok && !conflicto; intento++){
+    if(intento>0) await new Promise(res=>setTimeout(res,2000));
+    try{
+      const payload=Object.assign({}, COSTOS2, {_ifRev: COSTOS2._rev});
+      const body=JSON.stringify(payload);
+      const r=await fetch(COSTOS2_SYNC_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const data=await r.json();
+      if(data && data.conflict){ conflicto=data.current; break; }
+      if(data && typeof data.rev==='number') COSTOS2._rev=data.rev;
+      ok=true;
+    }catch(e){ ultimoError=e; console.error('No se pudo guardar Costos 2 en la nube:', e); }
+  }
+  costos2Enviando=false;
+  if(conflicto){
+    costos2FusionarRemoto(conflicto);
+    render();
+    costos2SyncEstado='nube'; costos2SyncDetalle='';
+    toast('Otra pestaña o dispositivo guardó algo más nuevo — se actualizó esta vista. Revisa y vuelve a hacer tu cambio si hace falta.', 'error');
+  } else if(ok){
+    costos2SyncEstado='nube'; costos2SyncDetalle='';
+    costosGuardarLocal2();
+  } else{
+    costos2SyncEstado='nube-error'; costos2SyncDetalle=String(ultimoError&&ultimoError.message||ultimoError);
+    toast('No se pudo guardar en la nube. Revisa tu conexión — el cambio queda solo en este navegador por ahora.', 'error');
+  }
+  costos2ActualizarPildoraSync();
+  if(costos2EnviarPendiente){ costos2EnviarPendiente=false; costos2EnviarNube(); }
+}
+async function costos2SincronizarAhora(silencioso){
+  if(costos2SyncTimer || costos2Enviando){
+    if(!silencioso) toast('Hay un cambio sin guardar todavía, espera un segundo…');
+    return;
+  }
+  if(current==='costos2' && costosView2==='detalle' && cotizacionSucia2){
+    if(!silencioso) toast('Tienes una cotización abierta con cambios sin guardar — sincroniza después de guardar.');
+    return;
+  }
+  if(costosFormularioSucio()){
+    if(!silencioso) toast('Tienes datos sin guardar en el formulario de nueva cotización — sincroniza después de guardar.');
+    return;
+  }
+  try{
+    const res=await fetch(COSTOS2_SYNC_URL, {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const remoto=await res.json();
+    if(costos2SyncTimer || costos2Enviando) return;
+    if(current==='costos2' && costosView2==='detalle' && cotizacionSucia2) return;
+    if(costosFormularioSucio()) return;
+    const necesitaSubir=costos2FusionarRemoto(remoto);
+    costos2SyncEstado='nube'; costos2SyncDetalle=''; costos2ActualizarPildoraSync();
+    render();
+    if(necesitaSubir) saveCostos2(); // la nube estaba vacía: subimos lo que había localmente como punto de partida
+    if(!silencioso) toast('Costos y Cotizaciones 2 sincronizado desde la nube.');
+  }catch(e){
+    console.error('No se pudo leer Costos 2 desde la nube:', e);
+    costos2SyncEstado='nube-error'; costos2SyncDetalle=String(e&&e.message||e); costos2ActualizarPildoraSync();
+    if(!silencioso) toast('No se pudo conectar a la nube.','error');
+  }
+}
+function costos2FusionarRemoto(remoto){
+  if(!remoto || !Array.isArray(remoto.cotizaciones)){
+    if(remoto && typeof remoto._rev==='number') COSTOS2._rev=remoto._rev;
+    costosGuardarLocal2();
+    return true;
+  }
+  COSTOS2={
+    seq: Math.max(COSTOS2.seq||1, remoto.seq||1),
+    cotizaciones: remoto.cotizaciones,
+    _rev: remoto._rev||0,
+  };
+  costosGuardarLocal2();
+  return false;
+}
+if(!costos2SyncPoll) costos2SyncPoll=setInterval(()=>{ if(current==='costos2') costos2SincronizarAhora(true); }, 20000);
+// OJO: al cargar la página solo se LEE de la nube, nunca se escribe — así una copia local
+// vieja jamás pisa lo que hay guardado ahí (que es lo que de verdad importa). Si la nube
+// está vacía (primera vez que se conecta), se sube lo que ya había en este navegador.
+costos2SincronizarAhora(true);
 
 
 /* ---------- Avisos y confirmaciones propios (confirm()/alert() nativos no funcionan en el sandbox del Artifact) ---------- */
@@ -3068,7 +3173,7 @@ function renderCostos2(m){
       <div class="icon">${m.icon}</div>
       <div><h1>${m.title}</h1>
         <div class="sub">${m.desc}</div>
-        <span class="pill" style="background:#eef2f7;color:#57606a" title="Este es un módulo de pruebas: los datos quedan solo en este navegador, no se sincronizan con la nube todavía.">🧪 Borrador local (sin nube)</span>
+        <span id="costos2SyncPill" class="pill prod-cloud-pill" onclick="costos2SincronizarAhora(false)" title="Tocar para sincronizar ahora"></span>
         ${m.conn?`<div class="conn">${m.conn}</div>`:''}
       </div>
       <span class="grow"></span>
