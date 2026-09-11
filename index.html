@@ -3623,7 +3623,20 @@ function bindDetalleCotizacion2(){
   wrap.addEventListener('change', e=>{
     const card=e.target.closest('.item-card'); if(!card) return;
     marcarSucia2();
-    if(e.target.classList.contains('ci-tipovaina')){
+    if(e.target.classList.contains('ci-ancho')){
+      // El Ancho es un <select> — en Safari los <select> no siempre disparan "input" al
+      // elegir una opción (solo "change" es 100% confiable ahí), así que el auto-cálculo
+      // del Alto se maneja acá directo, no solo en el listener de "input" de más abajo.
+      const altoInput=card.querySelector('.ci-alto');
+      if(altoInput.dataset.auto!=='0'){
+        const anchoVal=parseNumCL(e.target.value);
+        altoInput.value = anchoVal? formatNumCL(altoAutoDesdeAncho(anchoVal),2) : '';
+        altoInput.dataset.auto='1';
+        altoInput.style.color='var(--muted)';
+      }
+      recalcCard(card); recalcTotales();
+    }
+    else if(e.target.classList.contains('ci-tipovaina')){
       const idx=[...wrap.children].indexOf(card);
       const it=leerItemDeCard2(card);
       // Al cambiar de Vaina de Lona <-> Huincha de poliéster, el costo vuelve a su valor
