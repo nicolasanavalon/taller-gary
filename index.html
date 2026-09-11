@@ -418,6 +418,14 @@
     color:var(--gold-d);margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--line)}
   .cf-section:first-of-type{margin-top:10px;padding-top:0;border-top:none}
   @media(max-width:640px){.cf-grid-3{grid-template-columns:1fr}.cf-span2{grid-column:span 1}}
+  /* Contacto y Despacho tienen la misma cantidad de filas — van lado a lado en vez de
+     uno debajo del otro, para aprovechar el ancho. El separador (línea + espacio de
+     arriba) que normalmente pone cada .cf-section se mueve al contenedor de a dos
+     columnas, para que aparezca una sola vez arriba de ambas en vez de una vez por
+     columna. */
+  .cf-cols{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--line)}
+  .cf-cols .cf-section{margin-top:0;padding-top:0;border-top:none}
+  @media(max-width:760px){.cf-cols{grid-template-columns:1fr;gap:0}}
   /* Formulario clásico: título a la izquierda, campo a la derecha (más fácil de leer
      de un vistazo que la grilla de columnas). */
   .cf-form{max-width:560px;margin-bottom:4px}
@@ -3055,23 +3063,28 @@ function renderCostos2(m){
         <div class="cf-row"><label>ID cotización</label><input id="cfId" value="${esc(draftCliente2.id)}" placeholder="Ej: COT-2026-001"></div>
       </div>
 
-      <div class="cf-section">Contacto</div>
-      <div class="cf-form">
-        <div class="cf-row"><label>Nombre contacto</label><input id="cfContacto" value="${esc(draftCliente2.contacto)}" placeholder="Persona de contacto"></div>
-        <div class="cf-row"><label>Mail</label><input type="email" id="cfMail" value="${esc(draftCliente2.mail)}" placeholder="correo@ejemplo.cl"></div>
-        <div class="cf-row"><label>Teléfono</label><input id="cfTelefono" value="${esc(draftCliente2.telefono)}" placeholder="+56 9 ..."></div>
-        <div class="cf-row"><label>Teléfono 2 <span class="muted" style="font-weight:400">(opcional)</span></label><input id="cfTelefono2" value="${esc(draftCliente2.telefono2||'')}" placeholder="+56 9 ..."></div>
-      </div>
-
-      <div class="cf-section">Despacho <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">y fecha</span></div>
-      <div class="cf-form">
-        <div class="cf-row"><label>Dirección</label><input id="cfDireccion" value="${esc(draftCliente2.direccion)}" placeholder="Dirección de despacho / facturación"></div>
-        <div class="cf-row"><label>Comuna</label><input id="cfComuna" value="${esc(draftCliente2.comuna||'')}" placeholder="Ej: Coronel"></div>
-        <div class="cf-row"><label>Región</label><select id="cfRegion">
-          <option value="">Selecciona...</option>
-          ${REGIONES_CHILE.map(r=>`<option ${draftCliente2.region===r?'selected':''}>${r}</option>`).join('')}
-        </select></div>
-        <div class="cf-row"><label>Fecha</label><input type="date" id="cfFecha" value="${draftCliente2.fecha}"></div>
+      <div class="cf-cols">
+        <div>
+          <div class="cf-section">Contacto</div>
+          <div class="cf-form">
+            <div class="cf-row"><label>Nombre contacto</label><input id="cfContacto" value="${esc(draftCliente2.contacto)}" placeholder="Persona de contacto"></div>
+            <div class="cf-row"><label>Mail</label><input type="email" id="cfMail" value="${esc(draftCliente2.mail)}" placeholder="correo@ejemplo.cl"></div>
+            <div class="cf-row"><label>Teléfono</label><input id="cfTelefono" value="${esc(draftCliente2.telefono)}" placeholder="+56 9 ..."></div>
+            <div class="cf-row"><label>Teléfono 2 <span class="muted" style="font-weight:400">(opcional)</span></label><input id="cfTelefono2" value="${esc(draftCliente2.telefono2||'')}" placeholder="+56 9 ..."></div>
+          </div>
+        </div>
+        <div>
+          <div class="cf-section">Despacho <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">y fecha</span></div>
+          <div class="cf-form">
+            <div class="cf-row"><label>Dirección</label><input id="cfDireccion" value="${esc(draftCliente2.direccion)}" placeholder="Dirección de despacho / facturación"></div>
+            <div class="cf-row"><label>Comuna</label><input id="cfComuna" value="${esc(draftCliente2.comuna||'')}" placeholder="Ej: Coronel"></div>
+            <div class="cf-row"><label>Región</label><select id="cfRegion">
+              <option value="">Selecciona...</option>
+              ${REGIONES_CHILE.map(r=>`<option ${draftCliente2.region===r?'selected':''}>${r}</option>`).join('')}
+            </select></div>
+            <div class="cf-row"><label>Fecha</label><input type="date" id="cfFecha" value="${draftCliente2.fecha}"></div>
+          </div>
+        </div>
       </div>
 
       <div class="row" style="justify-content:flex-end;margin-top:8px">
