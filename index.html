@@ -5635,9 +5635,14 @@ async function prodSincronizarAhora(silencioso){
     // entera igual (aunque no haya cambiado nada) es lo que causaba el parpadeo/salto de
     // scroll en el celular al navegar — sobre todo notorio en listas largas. Comparando
     // antes/después solo se re-renderiza cuando de verdad llegó algo distinto.
-    const antesJSON=JSON.stringify(PRODUCCION);
+    // OJO: comparar el objeto PRODUCCION completo no sirve — "_rev" y "seq" son
+    // contadores que casi siempre suben de un fetch al otro aunque las filas/anexos/
+    // historial sean exactamente los mismos (los incrementa cada guardado, de cualquier
+    // dispositivo). Comparando solo el contenido real se evita re-renderizar por nada.
+    const antesJSON=JSON.stringify({rows:PRODUCCION.rows, anexosOT:PRODUCCION.anexosOT, sublimacion:PRODUCCION.sublimacion, removedSeeds:PRODUCCION.removedSeeds});
     const huboNuevas=prodFusionarRemoto(remoto);
-    const huboCambios=huboNuevas || JSON.stringify(PRODUCCION)!==antesJSON;
+    const despuesJSON=JSON.stringify({rows:PRODUCCION.rows, anexosOT:PRODUCCION.anexosOT, sublimacion:PRODUCCION.sublimacion, removedSeeds:PRODUCCION.removedSeeds});
+    const huboCambios=huboNuevas || despuesJSON!==antesJSON;
     prodSyncEstado='nube'; prodSyncDetalle=''; prodActualizarPildoraSync();
     if(huboCambios && (current==='produccion' || current==='sublimacion')) render();
     if(huboNuevas) saveProduccion(); // solo si el merge trajo filas nuevas (ej. una OT que agregué yo) que aún no están en la nube
