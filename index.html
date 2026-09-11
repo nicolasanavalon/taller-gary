@@ -2919,8 +2919,25 @@ function seedCostos2(){
     }],
   };
 }
+/* Los ítems viejos (guardados antes de separar "Medidas" en Ancho/Alto) solo tenían el
+   campo combinado "medida" (ej. "3,00 x 2,00"), sin Ancho/Alto por separado. Sin esto, al
+   abrirlos las celdas de Ancho/Alto se ven vacías — no porque el dato se haya perdido,
+   sino porque se está leyendo desde un campo que ya no se usa. Se completa solo, una vez,
+   al cargar. */
+function migrarMedidasCostos2_(data){
+  (data.cotizaciones||[]).forEach(cot=>{
+    (cot.items||[]).forEach(it=>{
+      if((!it.ancho || !it.alto) && it.medida){
+        const {ancho,alto}=parseMedida2(it.medida);
+        if(ancho && !it.ancho) it.ancho=formatNumCL(ancho,2);
+        if(alto && !it.alto) it.alto=formatNumCL(alto,2);
+      }
+    });
+  });
+  return data;
+}
 function loadCostos2(){
-  try{ const raw=localStorage.getItem(KEY_COSTOS2); if(raw) return JSON.parse(raw); }catch(e){ console.error(e); }
+  try{ const raw=localStorage.getItem(KEY_COSTOS2); if(raw) return migrarMedidasCostos2_(JSON.parse(raw)); }catch(e){ console.error(e); }
   return seedCostos2();
 }
 function costosGuardarLocal2(){
@@ -3144,6 +3161,28 @@ const TIPOS_TELA2=['Bistrech','Raso','Raso Doble','Raso Doble Faz','Raso Bordado
    así siempre calzan con las medidas que ya tiene el mantenedor de precios. */
 function medidasDisponibles2(){
   return (TABLA_ARMADO2.filas||[]).map(f=>`${formatNumCL(f.ancho,2)} x ${formatNumCL(f.alto,2)}`);
+}
+/* Opciones del desplegable de "Ancho": anchos únicos del Tarifado de Armado, de menor a
+   mayor (mismo mantenedor que ya alimentaba el selector viejo de "Medidas"). */
+function anchosDisponibles2(){
+  const vistos=new Set(); const anchos=[];
+  (TABLA_ARMADO2.filas||[]).forEach(f=>{
+    const n=+f.ancho||0; if(!n || vistos.has(n)) return;
+    vistos.add(n); anchos.push(n);
+  });
+  anchos.sort((a,b)=>a-b);
+  return anchos.map(n=>formatNumCL(n,2));
+}
+/* Igual que arriba, pero si el ítem ya tiene un ancho guardado que no está en el
+   mantenedor (una medida especial que se escribió a mano antes de que este campo fuera
+   desplegable), se agrega igual en su posición — así nunca desaparece un dato ya cargado. */
+function anchosParaSelect2(anchoActual){
+  const lista=anchosDisponibles2();
+  if(anchoActual && !lista.includes(anchoActual)){
+    lista.push(anchoActual);
+    lista.sort((a,b)=>parseNumCL(a)-parseNumCL(b));
+  }
+  return lista;
 }
 /* "1,22 x 1,00" -> {ancho:1.22, alto:1.00}. Si no hay medida seleccionada, ambos quedan en 0. */
 function parseMedida2(medida){
@@ -3392,9 +3431,12 @@ function itemCardHTML2(it, i){
       <input type="hidden" class="ci-foto" value="${esc(it.foto||'')}">
       <select class="ci-tipoproducto" style="flex:0 0 132px;width:132px" title="Tipo de producto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
       <div class="ci-medida-wrap" style="flex:0 0 auto;display:flex;align-items:center;gap:3px" title="Ancho × Alto (m) — el Alto se calcula solo (2/3 del ancho); edítalo a mano si es una medida especial">
-        <input class="ci-ancho" type="text" inputmode="decimal" value="${esc(it.ancho||'')}" placeholder="Ancho" style="width:52px;text-align:center">
+        <select class="ci-ancho" title="Ancho (m)" style="width:74px;text-align:center">
+          <option value="">Ancho</option>
+          ${anchosParaSelect2(it.ancho).map(a=>`<option value="${a}" ${it.ancho===a?'selected':''}>${a}</option>`).join('')}
+        </select>
         <span class="muted" style="font-size:11px">×</span>
-        <input class="ci-alto" type="text" inputmode="decimal" value="${esc(it.alto||'')}" placeholder="Alto" data-auto="${altoAuto?'1':'0'}" style="width:52px;text-align:center${altoAuto?';color:var(--muted)':''}">
+        <input class="ci-alto" type="text" inputmode="decimal" value="${esc(it.alto||'')}" placeholder="Alto" data-auto="${altoAuto?'1':'0'}" style="width:74px;text-align:center${altoAuto?';color:var(--muted)':''}">
       </div>
       <select class="ci-tipotela" style="flex:0 0 140px;width:140px" title="Tela">${TIPOS_TELA2.map(tl=>`<option ${((it.tipoTela||'Bistrech')===tl)?'selected':''}>${tl}</option>`).join('')}</select>
       <button class="btn ghost sm insumos-toggle" type="button">▾ Insumos</button>
