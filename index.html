@@ -3156,7 +3156,7 @@ function parseMedida2(medida){
    medida (fórmula de siempre); Argollas sale del Tarifado de Armado por medida; todo
    queda editable a mano igual que en el resto del sistema. */
 function calcularInsumos2(it){
-  const {ancho,alto}=parseMedida2(it.medida);
+  const ancho=parseNumCL(it.ancho), alto=parseNumCL(it.alto);
   const telaCantExacta=(alto&&ancho)?((alto*ancho)/1.4)*1.2:0;
   const telaCant=redondear1(telaCantExacta);
   const telaCosto=it.telaCosto!=null && it.telaCosto!=='' ? +it.telaCosto : 730;
@@ -3220,6 +3220,18 @@ function parseMiles(str){ if(str==null) return 0; const n=parseInt(String(str).r
    se calcula con el valor exacto (con todos los decimales), para no perder precisión en el costeo. */
 function redondear1(n){ return Math.round((+n||0)*10)/10; }
 function redondear4(n){ return Math.round((+n||0)*10000)/10000; }
+function redondear2(n){ return Math.round((+n||0)*100)/100; }
+/* El Alto de una bandera chilena siempre es 2/3 del Ancho — se calcula solo apenas se
+   escribe el Ancho. Si el Alto ya fue editado a mano (medida especial, no calza con esa
+   proporción), no se pisa: sigue el valor que el usuario dejó. Al cargar un ítem ya
+   guardado, se detecta si su Alto calza con la proporción de siempre (automático) o no
+   (manual) comparando contra lo que hubiera dado el cálculo. */
+function altoAutoDesdeAncho(ancho){ return redondear2(parseNumCL(ancho)*2/3); }
+function altoEsAutomatico(ancho, alto){
+  const a=parseNumCL(ancho), h=parseNumCL(alto);
+  if(!a || !h) return true;
+  return Math.abs(h-altoAutoDesdeAncho(ancho)) < 0.005;
+}
 function calcularTela2(it){
   const alto=parseNumCL(it.alto), ancho=parseNumCL(it.ancho);
   const telaCantExacta = (alto&&ancho) ? ((alto*ancho)/1.4)*1.2 : 0;
@@ -3366,7 +3378,7 @@ function insumosPanelHTML2(it){
     </div>`;
 }
 function itemCardHTML2(it, i){
-  const medidas=medidasDisponibles2();
+  const altoAuto=altoEsAutomatico(it.ancho, it.alto);
   return `<div class="panel item-card" data-idx="${i}">
     <div class="item-body">
     <div class="row item-top-row" style="align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">
@@ -3379,10 +3391,11 @@ function itemCardHTML2(it, i){
       </div>
       <input type="hidden" class="ci-foto" value="${esc(it.foto||'')}">
       <select class="ci-tipoproducto" style="flex:0 0 132px;width:132px" title="Tipo de producto">${TIPOS_PRODUCTO.map(tp=>`<option ${((it.tipoProducto||'Bandera')===tp)?'selected':''}>${tp}</option>`).join('')}</select>
-      <select class="ci-medida" style="flex:0 0 118px;width:118px" title="Medidas">
-        <option value="">Medidas...</option>
-        ${medidas.map(m=>`<option ${it.medida===m?'selected':''}>${m}</option>`).join('')}
-      </select>
+      <div class="ci-medida-wrap" style="flex:0 0 auto;display:flex;align-items:center;gap:3px" title="Ancho × Alto (m) — el Alto se calcula solo (2/3 del ancho); edítalo a mano si es una medida especial">
+        <input class="ci-ancho" type="text" inputmode="decimal" value="${esc(it.ancho||'')}" placeholder="Ancho" style="width:52px;text-align:center">
+        <span class="muted" style="font-size:11px">×</span>
+        <input class="ci-alto" type="text" inputmode="decimal" value="${esc(it.alto||'')}" placeholder="Alto" data-auto="${altoAuto?'1':'0'}" style="width:52px;text-align:center${altoAuto?';color:var(--muted)':''}">
+      </div>
       <select class="ci-tipotela" style="flex:0 0 140px;width:140px" title="Tela">${TIPOS_TELA2.map(tl=>`<option ${((it.tipoTela||'Bistrech')===tl)?'selected':''}>${tl}</option>`).join('')}</select>
       <button class="btn ghost sm insumos-toggle" type="button">▾ Insumos</button>
       <div class="insumos-total-badge">Insumos: <b class="ins-total-badge">${money(calcularInsumos2(it).subtotalInsumos)}</b></div>
@@ -3439,7 +3452,10 @@ function leerItemDeCard2(card){
     tipo:card.querySelector('.ci-tipo').value.trim(),
     foto:card.querySelector('.ci-foto').value||'',
     tipoProducto:card.querySelector('.ci-tipoproducto').value,
-    medida:card.querySelector('.ci-medida').value,
+    ancho:card.querySelector('.ci-ancho').value,
+    alto:card.querySelector('.ci-alto').value,
+    medida:(card.querySelector('.ci-ancho').value && card.querySelector('.ci-alto').value)
+      ? card.querySelector('.ci-ancho').value+' x '+card.querySelector('.ci-alto').value : '',
     tipoTela:card.querySelector('.ci-tipotela').value,
     telaCosto:card.querySelector('.ci-telacosto').value,
     creaCant:card.querySelector('.ci-creacant').value,
@@ -3545,6 +3561,21 @@ function bindDetalleCotizacion2(){
   wrap.addEventListener('input', e=>{
     const card=e.target.closest('.item-card'); if(!card) return;
     marcarSucia2();
+    // El Alto se calcula solo (2/3 del Ancho) mientras no se haya editado a mano — apenas
+    // se escribe directo en Alto, queda "marcado" y de ahí en adelante los cambios de
+    // Ancho ya no lo pisan (así se puede dejar una medida especial sin que se resetee).
+    if(e.target.classList.contains('ci-ancho')){
+      const altoInput=card.querySelector('.ci-alto');
+      if(altoInput.dataset.auto!=='0'){
+        const anchoVal=parseNumCL(e.target.value);
+        altoInput.value = anchoVal? formatNumCL(altoAutoDesdeAncho(anchoVal),2) : '';
+        altoInput.dataset.auto='1';
+        altoInput.style.color='var(--muted)';
+      }
+    } else if(e.target.classList.contains('ci-alto')){
+      e.target.dataset.auto='0';
+      e.target.style.color='';
+    }
     recalcCard(card); recalcTotales();
   });
   wrap.addEventListener('change', e=>{
