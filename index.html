@@ -5630,9 +5630,16 @@ async function prodSincronizarAhora(silencioso){
     const remoto=await res.json();
     if(prodSyncTimer || prodEnviando || prodEditGen!==genAntes) return; // hubo una edición local mientras esperábamos — no la pisemos
     const n=(remoto.rows||[]).length;
+    // La relectura automática (cada 20s mientras se está en Producción/Sublimación) casi
+    // siempre trae exactamente lo mismo que ya está en pantalla. Volver a dibujar la tabla
+    // entera igual (aunque no haya cambiado nada) es lo que causaba el parpadeo/salto de
+    // scroll en el celular al navegar — sobre todo notorio en listas largas. Comparando
+    // antes/después solo se re-renderiza cuando de verdad llegó algo distinto.
+    const antesJSON=JSON.stringify(PRODUCCION);
     const huboNuevas=prodFusionarRemoto(remoto);
+    const huboCambios=huboNuevas || JSON.stringify(PRODUCCION)!==antesJSON;
     prodSyncEstado='nube'; prodSyncDetalle=''; prodActualizarPildoraSync();
-    if(current==='produccion' || current==='sublimacion') render();
+    if(huboCambios && (current==='produccion' || current==='sublimacion')) render();
     if(huboNuevas) saveProduccion(); // solo si el merge trajo filas nuevas (ej. una OT que agregué yo) que aún no están en la nube
     else prodGuardarLocal();
     if(!silencioso) toast('Sincronizado: '+n+' fila(s) desde la nube.');
