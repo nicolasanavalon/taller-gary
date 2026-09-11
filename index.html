@@ -3035,7 +3035,12 @@ async function costos2SincronizarAhora(silencioso){
   }
 }
 function costos2FusionarRemoto(remoto){
-  if(!remoto || !Array.isArray(remoto.cotizaciones)){
+  // "Nube vacía" = todavía nadie ha guardado nada ahí (rev 0, sin cotizaciones) — recién
+  // conectado. Ahí se sube lo que ya había en este navegador como punto de partida, en
+  // vez de aceptar ese vacío como si fuera el dato bueno y borrar lo que el usuario tenía.
+  const nubeVacia = !remoto || !Array.isArray(remoto.cotizaciones)
+    || ((remoto._rev||0)===0 && remoto.cotizaciones.length===0);
+  if(nubeVacia){
     if(remoto && typeof remoto._rev==='number') COSTOS2._rev=remoto._rev;
     costosGuardarLocal2();
     return true;
