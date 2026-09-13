@@ -6374,9 +6374,16 @@ function sublimExportarPDF(tabla){
     const cajasHtml = conRollo ? sublimCajasSublimadoPlanasHtml(filas) : sublimCajasImpresionPlanasHtml(filas);
     return `<h2>${esc(fechaLegibleCorta(f))}</h2>${cajasHtml}`;
   }).join('');
-  const win=window.open('', '_blank');
-  if(!win){ toast('El navegador bloqueó la ventana de impresión — habilita las ventanas emergentes para este sitio.','error'); return; }
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${titulo}</title><style>
+  // Se usa un iframe oculto (no una ventana nueva) para que nunca choque con el
+  // bloqueador de ventanas emergentes del navegador — solo hay que imprimir, no mostrar
+  // una pestaña aparte.
+  const iframe=document.createElement('iframe');
+  iframe.setAttribute('aria-hidden','true');
+  iframe.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none';
+  document.body.appendChild(iframe);
+  const doc=iframe.contentWindow.document;
+  doc.open();
+  doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>${titulo}</title><style>
     body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#222;padding:16px 22px}
     h1{font-family:Georgia,serif;font-size:20px;margin:0 0 16px}
     h2{font-family:Georgia,serif;font-size:14px;color:#8a6a10;text-transform:capitalize;margin:22px 0 6px;border-bottom:1px solid #e4d9b8;padding-bottom:4px}
@@ -6393,9 +6400,15 @@ function sublimExportarPDF(tabla){
     <h1>${titulo}</h1>
     ${cuerpo || '<p>Sin registros para el período mostrado.</p>'}
   </body></html>`);
-  win.document.close();
-  win.focus();
-  setTimeout(()=>{ try{ win.print(); }catch(err){} }, 300);
+  doc.close();
+  let limpio=false;
+  const limpiar=()=>{ if(limpio) return; limpio=true; iframe.remove(); };
+  iframe.contentWindow.addEventListener('afterprint', limpiar);
+  setTimeout(limpiar, 30000); // por si el navegador no dispara "afterprint" en algún flujo
+  setTimeout(()=>{
+    try{ iframe.contentWindow.focus(); iframe.contentWindow.print(); }
+    catch(err){ toast('No se pudo abrir la vista de impresión.','error'); limpiar(); }
+  }, 250);
 }
 function sublimAgregarNota(tabla, fecha){
   const bg=document.createElement('div'); bg.className='confirm-bg';
