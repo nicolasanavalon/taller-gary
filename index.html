@@ -6297,25 +6297,105 @@ function sublimMover(tabla, id, dir){
 }
 /* Nota libre (ej. "Cambio de rollo", "Corte") — un registro especial sin datos de
    producto, que solo sirve de separador visual dentro del historial del día. */
-/* "Exportar a PDF" usa el diálogo de imprimir del propio navegador (el usuario elige
-   "Guardar como PDF" ahí) con una hoja de estilos de impresión que deja solo este
-   cuadro (desde su título para abajo), sin Producto ni los botones de acción, y en
-   horizontal — ver @media print en el <style>. */
+/* "Exportar a PDF": la tabla en pantalla tiene columnas con scroll y encabezados
+   "pegajosos" (position:sticky) que el motor de impresión de Chrome no maneja bien —
+   probado en la práctica, imprimía la hoja en blanco. En vez de tratar de imprimir la
+   página tal cual, se arma una ventana nueva con HTML/CSS simple (una tabla de verdad,
+   sin nada "pegajoso" ni con scroll propio) armada directo desde los datos — esa es la
+   que se manda a imprimir, así el resultado no depende del layout de la app. */
+function sublimFilaPlanaHtml(e, conRollo){
+  if(e.tipo==='nota'){
+    return `<tr class="nota-row"><td colspan="${conRollo?8:7}">${esc(e.mensaje)}</td></tr>`;
+  }
+  return `<tr>
+    <td>${e.foto?`<img src="${esc(e.foto)}">`:''}</td>
+    <td>${esc(e.ot)}</td>
+    <td>${esc(e.cliente)}</td>
+    <td>${esc(e.medida)}</td>
+    <td>${esc(e.tela)}</td>
+    <td class="num">${esc(e.cant)}</td>
+    ${conRollo?`<td>${esc(e.rollo)}</td>`:''}
+    <td class="num">${esc(e.metros)}</td>
+    <td>${esc(e.obs)}</td>
+  </tr>`;
+}
+function sublimCabeceraPlanaHtml(conRollo){
+  return `<tr><th>Foto</th><th>OT</th><th>Cliente</th><th>Medida</th><th>Tela</th><th>Cant</th>${conRollo?'<th>Rollo</th>':''}<th>Metros</th><th>Obs</th></tr>`;
+}
+function sublimCajasImpresionPlanasHtml(filas){
+  const cajas=[[]];
+  filas.forEach(e=>{
+    if(e.tipo==='nota' && e.mensaje==='🔄 Cambio de rollo') cajas.push([]);
+    else cajas[cajas.length-1].push(e);
+  });
+  return cajas.map((caja,i)=>{
+    if(!caja.length) return '';
+    const totalCant=caja.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+numLocal(e.cant),0);
+    const totalMetros=caja.filter(e=>e.tipo!=='nota').reduce((s,e)=>s+numLocal(e.metros),0);
+    return `<div class="rollo-box">
+      <div class="rollo-head">Rollo ${i+1} · ${totalCant} unid. · ${totalMetros} mts</div>
+      <table>${sublimCabeceraPlanaHtml(false)}<tbody>${caja.map(e=>sublimFilaPlanaHtml(e,false)).join('')}</tbody></table>
+    </div>`;
+  }).join('');
+}
+function sublimCajasSublimadoPlanasHtml(filas){
+  const cajas=[]; let rolloActual;
+  filas.forEach(e=>{
+    if(e.tipo!=='nota' && (!cajas.length || e.rollo!==rolloActual)){ cajas.push({rollo:e.rollo, filas:[]}); rolloActual=e.rollo; }
+    if(!cajas.length) cajas.push({rollo:'', filas:[]});
+    cajas[cajas.length-1].filas.push(e);
+  });
+  return cajas.map(caja=>{
+    const items=caja.filas.filter(e=>e.tipo!=='nota');
+    const totalCant=items.reduce((s,e)=>s+numLocal(e.cant),0);
+    const totalMetros=items.reduce((s,e)=>s+numLocal(e.metros),0);
+    return `<div class="rollo-box">
+      <div class="rollo-head">Rollo ${caja.rollo?esc(caja.rollo):'(sin definir)'} · ${totalCant} unid. · ${totalMetros} mts</div>
+      <table>${sublimCabeceraPlanaHtml(true)}<tbody>${caja.filas.map(e=>sublimFilaPlanaHtml(e,true)).join('')}</tbody></table>
+    </div>`;
+  }).join('');
+}
 function sublimExportarPDF(tabla){
-  document.body.classList.add('sublim-exportando');
-  document.body.dataset.exportTabla = tabla;
-  let limpio=false;
-  const limpiar=()=>{
-    if(limpio) return; limpio=true;
-    document.body.classList.remove('sublim-exportando');
-    delete document.body.dataset.exportTabla;
-    window.removeEventListener('afterprint', limpiar);
-  };
-  window.addEventListener('afterprint', limpiar);
-  // Por si el navegador no dispara "afterprint" en algún flujo (pasa a veces), se
-  // limpia solo igual pasado un rato para no dejar la vista de impresión pegada.
-  setTimeout(limpiar, 20000);
-  setTimeout(()=>window.print(), 50);
+  const entradas=(PRODUCCION.sublimacion&&PRODUCCION.sublimacion[tabla])||[];
+  const porFecha={};
+  entradas.forEach(e=>{ const f=e.fecha||'(sin fecha)'; (porFecha[f]=porFecha[f]||[]).push(e); });
+  let fechas;
+  if(sublimFiltroFecha){ fechas=[sublimFiltroFecha]; porFecha[sublimFiltroFecha]=porFecha[sublimFiltroFecha]||[]; }
+  else {
+    const hoy=todayISO(), manana=mananaISO();
+    porFecha[hoy]=porFecha[hoy]||[]; porFecha[manana]=porFecha[manana]||[];
+    fechas=Object.keys(porFecha).sort((a,b)=> a<b?1:(a>b?-1:0));
+  }
+  const conRollo = tabla==='sublimado';
+  const titulo = tabla==='impresion' ? '🖨️ Impresión' : '🎨 Sublimación';
+  const cuerpo = fechas.map(f=>{
+    const filas=(porFecha[f]||[]).slice().sort(sublimCompararOrden);
+    if(!filas.length) return '';
+    const cajasHtml = conRollo ? sublimCajasSublimadoPlanasHtml(filas) : sublimCajasImpresionPlanasHtml(filas);
+    return `<h2>${esc(fechaLegibleCorta(f))}</h2>${cajasHtml}`;
+  }).join('');
+  const win=window.open('', '_blank');
+  if(!win){ toast('El navegador bloqueó la ventana de impresión — habilita las ventanas emergentes para este sitio.','error'); return; }
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${titulo}</title><style>
+    body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#222;padding:16px 22px}
+    h1{font-family:Georgia,serif;font-size:20px;margin:0 0 16px}
+    h2{font-family:Georgia,serif;font-size:14px;color:#8a6a10;text-transform:capitalize;margin:22px 0 6px;border-bottom:1px solid #e4d9b8;padding-bottom:4px}
+    .rollo-box{margin-bottom:14px}
+    .rollo-head{font-weight:700;font-size:12.5px;background:#f6efdc;padding:6px 10px;border-radius:6px 6px 0 0}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:5px 8px;border-bottom:1px solid #e2e2e2;font-size:11.5px;text-align:left;vertical-align:middle}
+    th{text-transform:uppercase;font-size:9.5px;color:#888;font-weight:700;background:#fafafa}
+    td.num,th.num{text-align:right}
+    img{width:30px;height:22px;object-fit:cover;border-radius:3px;display:block}
+    .nota-row td{font-weight:700;background:#fff7e0}
+    @media print{ @page{ size: landscape; margin: 12mm; } }
+  </style></head><body>
+    <h1>${titulo}</h1>
+    ${cuerpo || '<p>Sin registros para el período mostrado.</p>'}
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>{ try{ win.print(); }catch(err){} }, 300);
 }
 function sublimAgregarNota(tabla, fecha){
   const bg=document.createElement('div'); bg.className='confirm-bg';
