@@ -2988,7 +2988,7 @@ async function costos2EnviarNube(){
   for(let intento=0; intento<3 && !ok && !conflicto; intento++){
     if(intento>0) await new Promise(res=>setTimeout(res,2000));
     try{
-      const payload=Object.assign({}, COSTOS2, {_ifRev: COSTOS2._rev});
+      const payload=Object.assign({}, COSTOS2, {catalogo: CATALOGO2, _ifRev: COSTOS2._rev});
       const body=JSON.stringify(payload);
       const r=await fetch(COSTOS2_SYNC_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body});
       if(!r.ok) throw new Error('HTTP '+r.status);
@@ -3027,6 +3027,10 @@ async function costos2SincronizarAhora(silencioso){
     if(!silencioso) toast('Tienes datos sin guardar en el formulario de nueva cotización — sincroniza después de guardar.');
     return;
   }
+  if(current==='costos2' && costos2Tab==='catalogo' && catalogoSucio2){
+    if(!silencioso) toast('Tienes cambios sin guardar en el Costeo por Producto — sincroniza después de guardar.');
+    return;
+  }
   try{
     const res=await fetch(COSTOS2_SYNC_URL, {cache:'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status);
@@ -3034,6 +3038,7 @@ async function costos2SincronizarAhora(silencioso){
     if(costos2SyncTimer || costos2Enviando) return;
     if(current==='costos2' && costosView2==='detalle' && cotizacionSucia2) return;
     if(costosFormularioSucio()) return;
+    if(current==='costos2' && costos2Tab==='catalogo' && catalogoSucio2) return;
     const necesitaSubir=costos2FusionarRemoto(remoto);
     costos2SyncEstado='nube'; costos2SyncDetalle=''; costos2ActualizarPildoraSync();
     render();
@@ -3051,6 +3056,17 @@ function costos2FusionarRemoto(remoto){
   // vez de aceptar ese vacío como si fuera el dato bueno y borrar lo que el usuario tenía.
   const nubeVacia = !remoto || !Array.isArray(remoto.cotizaciones)
     || ((remoto._rev||0)===0 && remoto.cotizaciones.length===0);
+  // El Costeo por Producto viaja como un campo más adentro del mismo JSON de Costos y
+  // Cotizaciones 2 (mismo backend). Si la nube ya trae un catálogo con la versión que
+  // este navegador entiende, se usa ese; si no (nube vacía, o versión vieja/incompatible),
+  // se sube el catálogo local como punto de partida en vez de perderlo o pisarlo con nada.
+  let necesitaSubirCatalogo=false;
+  if(remoto && remoto.catalogo && remoto.catalogo.v===CATALOGO2_VERSION){
+    CATALOGO2=remoto.catalogo;
+    saveCatalogo2Local_();
+  } else {
+    necesitaSubirCatalogo=true;
+  }
   if(nubeVacia){
     if(remoto && typeof remoto._rev==='number') COSTOS2._rev=remoto._rev;
     costosGuardarLocal2();
@@ -3062,13 +3078,8 @@ function costos2FusionarRemoto(remoto){
     _rev: remoto._rev||0,
   };
   costosGuardarLocal2();
-  return false;
+  return necesitaSubirCatalogo;
 }
-if(!costos2SyncPoll) costos2SyncPoll=setInterval(()=>{ if(current==='costos2') costos2SincronizarAhora(true); }, 20000);
-// OJO: al cargar la página solo se LEE de la nube, nunca se escribe — así una copia local
-// vieja jamás pisa lo que hay guardado ahí (que es lo que de verdad importa). Si la nube
-// está vacía (primera vez que se conecta), se sube lo que ya había en este navegador.
-costos2SincronizarAhora(true);
 
 
 /* ---------- Avisos y confirmaciones propios (confirm()/alert() nativos no funcionan en el sandbox del Artifact) ---------- */
@@ -3140,11 +3151,29 @@ function loadCatalogo2(){
   try{ const raw=localStorage.getItem(KEY_CATALOGO2); if(raw){ const data=JSON.parse(raw); if(data.v===CATALOGO2_VERSION) return data; } }catch(e){ console.error(e); }
   return {v:CATALOGO2_VERSION, productos:[]};
 }
-function saveCatalogo2(){ localStorage.setItem(KEY_CATALOGO2, JSON.stringify(CATALOGO2)); }
+function saveCatalogo2Local_(){ localStorage.setItem(KEY_CATALOGO2, JSON.stringify(CATALOGO2)); }
+/* Se guarda junto con Costos y Cotizaciones 2 en la misma nube (mismo backend, un campo
+   más en el mismo JSON) — no hace falta otro Google Sheet ni otro Apps Script. */
+function saveCatalogo2(){
+  saveCatalogo2Local_();
+  costos2SyncEstado='guardando'; costos2ActualizarPildoraSync();
+  clearTimeout(costos2SyncTimer);
+  costos2SyncTimer=setTimeout(costos2EnviarNube, 900);
+}
 let CATALOGO2=loadCatalogo2();
 let catalogoSucio2=false;
 let catalogo2Buscar='';
 let catalogoDetalleId2=null; // id del producto abierto en la grilla (null = lista de productos)
+/* El primer sync al cargar la página va acá (no más arriba, junto a costos2EnviarNube/
+   costos2FusionarRemoto) a propósito: esas funciones ya usan costosView2/cotizacionSucia2/
+   costos2Tab/catalogoSucio2, declarados con "let" más abajo en el archivo — llamarlas antes
+   de que esas declaraciones se ejecuten revienta por "temporal dead zone" (referencia a una
+   variable let/const antes de su línea). Puesto acá, después de la última, ya no pasa. */
+if(!costos2SyncPoll) costos2SyncPoll=setInterval(()=>{ if(current==='costos2') costos2SincronizarAhora(true); }, 20000);
+// OJO: al cargar la página solo se LEE de la nube, nunca se escribe — así una copia local
+// vieja jamás pisa lo que hay guardado ahí (que es lo que de verdad importa). Si la nube
+// está vacía (primera vez que se conecta), se sube lo que ya había en este navegador.
+costos2SincronizarAhora(true);
 function productoNuevo2(){
   return {id:uid(), nombre:'', tipoProducto:'Bandera', tipoTela:'Bistrech', tipoVaina:'Vaina de Lona', tipoAcabado:'Confección', filas:[]};
 }
