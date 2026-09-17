@@ -200,6 +200,13 @@
 
   /* ---------- Resultados de búsqueda anterior ---------- */
   .resultado-ant{padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;align-items:center;gap:10px}
+  /* Grilla del Costeo por Producto: para abajo las medidas, para la derecha cada ítem de costo */
+  .prodcat-grid{border-collapse:collapse;width:100%;font-size:12.5px;white-space:nowrap}
+  .prodcat-grid th{background:var(--gold-soft);color:var(--gold-d);font-size:10px;text-transform:uppercase;
+    letter-spacing:.3px;padding:7px 6px;text-align:center;border:1px solid var(--gold-line)}
+  .prodcat-grid td{padding:5px 6px;text-align:center;border:1px solid var(--line)}
+  .prodcat-grid input{padding:4px 5px;font-size:12.5px;text-align:center}
+  .prodcat-grid input:disabled{background:rgba(0,0,0,.04)}
   .resultado-thumb{width:34px;height:24px;object-fit:cover;border-radius:5px;margin-right:8px;vertical-align:middle;border:1px solid var(--gold-line)}
   .tag{display:inline-block;color:var(--muted);background:var(--gold-soft);padding:1px 6px;border-radius:5px;margin-top:2px}
 
@@ -3119,18 +3126,38 @@ let costosView2='lista'; // 'lista' | 'detalle'
 let detalleCotId2=null;
 let costos2Tab='cotizaciones'; // 'cotizaciones' | 'catalogo' — submenú dentro de Costos y Cotizaciones 2
 
-/* ---------- Costeo por Producto: mantenedor de banderas ya costeadas, sin flete ni margen ----------
-   Se arma la cotización a partir de esto (buscar → agregar). Guardado solo en este
-   navegador por ahora (mismo alcance que el resto del módulo de pruebas). */
+/* ---------- Costeo por Producto: mantenedor tipo grilla, uno por producto ----------
+   Cada producto (ej. "Pabellón Nacional") tiene atributos fijos (tipo, tela, vaina,
+   especificación) y una grilla con una fila por medida — para abajo las medidas, para
+   la derecha cada ítem de costo (Tela/Estrella/Vaina-Huincha/Argollas/Confección),
+   rellena sola desde los mantenedores de tarifas y editable celda por celda. Sin
+   flete/margen/IVA (eso es a nivel de cotización) y sin nombre/cantidad/foto por fila
+   (cada fila es solo una medida del mismo producto). Guardado solo en este navegador
+   por ahora (mismo alcance que el resto del módulo de pruebas). */
 const KEY_CATALOGO2='taller_gary_catalogo2_v1';
+const CATALOGO2_VERSION=2;
 function loadCatalogo2(){
-  try{ const raw=localStorage.getItem(KEY_CATALOGO2); if(raw) return JSON.parse(raw); }catch(e){ console.error(e); }
-  return {v:1, productos:[]};
+  try{ const raw=localStorage.getItem(KEY_CATALOGO2); if(raw){ const data=JSON.parse(raw); if(data.v===CATALOGO2_VERSION) return data; } }catch(e){ console.error(e); }
+  return {v:CATALOGO2_VERSION, productos:[]};
 }
 function saveCatalogo2(){ localStorage.setItem(KEY_CATALOGO2, JSON.stringify(CATALOGO2)); }
 let CATALOGO2=loadCatalogo2();
 let catalogoSucio2=false;
 let catalogo2Buscar='';
+let catalogoDetalleId2=null; // id del producto abierto en la grilla (null = lista de productos)
+function productoNuevo2(){
+  return {id:uid(), nombre:'', tipoProducto:'Bandera', tipoTela:'Bistrech', tipoVaina:'Vaina de Lona', tipoAcabado:'Confección', filas:[]};
+}
+/* Costo de una fila (una medida) de un producto: junta los atributos fijos del producto
+   con la medida/overrides de la fila y reutiliza el mismo motor de Costos y
+   Cotizaciones 2 (calcularInsumos2 + calcularConfeccion2) — cero fórmulas nuevas. */
+function calcularFilaProducto2(producto, fila){
+  const it={...producto, ...fila};
+  const insumos=calcularInsumos2(it);
+  const confeccion=calcularConfeccion2(it);
+  const costoReal=insumos.subtotalInsumos+confeccion.subtotalConfeccion;
+  return {...insumos, ...confeccion, costoReal};
+}
 function money(n){ n=Math.round(+n||0); const s=Math.abs(n).toLocaleString('es-CL'); return (n<0?'-$':'$')+s; }
 /* Porcentaje limpio para inputs: 10 en vez de 10.0, pero conserva decimales reales (ej: 12.5) */
 function formatPct(frac){ return +((+frac||0)*100).toFixed(2); }
@@ -3289,23 +3316,106 @@ function renderListaCotizaciones2({editando}){
 
 /* ---------- Costeo por Producto: vista del mantenedor ---------- */
 function renderCatalogo2(){
+  if(catalogoDetalleId2){
+    const producto=CATALOGO2.productos.find(x=>x.id===catalogoDetalleId2);
+    if(producto) return renderProductoCatalogo2(producto);
+    catalogoDetalleId2=null;
+  }
   const q=normalizarNombre(catalogo2Buscar||'');
-  const productos=CATALOGO2.productos.map((p,i)=>({p,i}))
-    .filter(({p})=>!q || normalizarNombre(`${p.tipo} ${p.tipoProducto} ${p.ancho} ${p.alto} ${p.tipoTela}`).includes(q));
+  const productos=CATALOGO2.productos.filter(p=>!q || normalizarNombre(`${p.nombre} ${p.tipoProducto}`).includes(q));
   return `
     <div class="panel" style="margin-bottom:16px">
       <h2 style="margin:0 0 4px">📦 Costeo por Producto</h2>
-      <div class="muted" style="font-size:13px;margin-bottom:12px">Banderas ya costeadas por medida — Tela, Estrella, Vaina/Huincha, Argollas y Confección, <b>sin flete, financiero, margen ni IVA</b>. Desde acá se buscan y traen los productos al armar una cotización.</div>
+      <div class="muted" style="font-size:13px;margin-bottom:12px">Mantenedor por producto (ej. "Pabellón Nacional"): una grilla con todas sus medidas y el costo de cada ítem (Tela, Estrella, Vaina/Huincha, Argollas, Confección), <b>sin flete, financiero, margen ni IVA</b> — eso se agrega recién al armar la cotización.</div>
       <div class="row" style="gap:8px">
-        <input type="text" id="catalogoBuscar2" value="${esc(catalogo2Buscar||'')}" placeholder="Buscar por nombre, tipo, medida o tela..." style="flex:1;min-width:200px">
-        <button class="btn ghost sm" id="addCatalogo2">+ Agregar producto</button>
-        <button class="btn sm" id="guardarCatalogo2Btn">💾 Guardar cambios</button>
+        <input type="text" id="catalogoBuscar2" value="${esc(catalogo2Buscar||'')}" placeholder="Buscar producto por nombre o tipo..." style="flex:1;min-width:200px">
+        <button class="btn sm" id="addCatalogo2">+ Nuevo producto</button>
       </div>
     </div>
-    <div id="catalogoList2" class="full-bleed" style="display:flex;flex-direction:column;gap:16px">${
-      productos.length? productos.map(({p,i})=>itemCardHTML2(p,i)).join('')
-      : `<div class="panel muted" style="text-align:center">${CATALOGO2.productos.length? 'Sin resultados para esa búsqueda.' : 'Todavía no hay productos costeados. Apreta "+ Agregar producto" para empezar.'}</div>`
+    <div id="catalogoList2">${
+      productos.length? productos.map(p=>`
+      <div class="panel resultado-ant" style="cursor:pointer" onclick="catalogoDetalleId2='${p.id}';render()">
+        <div class="row between" style="align-items:center">
+          <div><b>${esc(p.nombre||'(sin nombre)')}</b> <span class="tag">${esc(p.tipoProducto)}</span>
+            <span class="muted" style="font-size:12px"> · ${esc(p.tipoTela)} · ${esc(p.tipoVaina)} · ${esc(p.tipoAcabado)} · ${p.filas.length} medida${p.filas.length===1?'':'s'}</span></div>
+          <button class="btn danger sm" onclick="event.stopPropagation();eliminarProductoCatalogo2('${p.id}')">✕ Eliminar</button>
+        </div>
+      </div>`).join('')
+      : `<div class="panel muted" style="text-align:center">${CATALOGO2.productos.length? 'Sin resultados para esa búsqueda.' : 'Todavía no hay productos definidos. Apreta "+ Nuevo producto" para empezar (ej. "Pabellón Nacional").'}</div>`
     }</div>`;
+}
+function eliminarProductoCatalogo2(id){
+  confirmDialog('¿Eliminar este producto y toda su grilla de medidas?', ()=>{
+    CATALOGO2.productos=CATALOGO2.productos.filter(p=>p.id!==id);
+    saveCatalogo2();
+    render();
+  }, 'Eliminar');
+}
+function renderProductoCatalogo2(producto){
+  const filas=[...producto.filas].map((f,i)=>({f,i})).sort((a,b)=>a.f.ancho-b.f.ancho);
+  const anchos=anchosDisponibles2();
+  return `
+    <div class="backlink" onclick="catalogoDetalleId2=null;render()">← Volver a Costeo por Producto</div>
+    <div class="panel" style="margin-bottom:16px">
+      <div class="row between" style="align-items:center;margin-bottom:10px">
+        <h2 style="margin:0">📦 ${esc(producto.nombre||'(sin nombre)')}</h2>
+        <button class="btn sm" id="guardarCatalogo2Btn">💾 Guardar cambios</button>
+      </div>
+      <div class="cf-form" style="max-width:none">
+        <div class="row" style="gap:12px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:180px"><label>Nombre del producto</label><input class="prodcat-nombre" value="${esc(producto.nombre)}" placeholder="Ej: Pabellón Nacional"></div>
+          <div class="field" style="flex:0 0 160px"><label>Tipo de producto</label><select class="prodcat-tipoproducto">${TIPOS_PRODUCTO.map(tp=>`<option ${producto.tipoProducto===tp?'selected':''}>${tp}</option>`).join('')}</select></div>
+          <div class="field" style="flex:0 0 160px"><label>Tipo de tela</label><select class="prodcat-tipotela">${TIPOS_TELA2.map(tl=>`<option ${producto.tipoTela===tl?'selected':''}>${tl}</option>`).join('')}</select></div>
+          <div class="field" style="flex:0 0 170px"><label>Tipo de vaina</label><select class="prodcat-tipovaina">${TIPOS_VAINA.map(tv=>`<option value="${esc(tv)}" ${producto.tipoVaina===tv?'selected':''}>${tv}</option>`).join('')}</select></div>
+          <div class="field" style="flex:0 0 150px"><label>Especificación</label><select class="prodcat-tipoacabado">${TIPOS_ACABADO.map(ta=>`<option ${producto.tipoAcabado===ta?'selected':''}>${ta}</option>`).join('')}</select></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="row between" style="align-items:center;margin-bottom:10px">
+        <h2 style="margin:0;font-size:15px">Medidas y costos</h2>
+        <div class="row" style="gap:6px">
+          <select id="prodcatAgregarAncho" style="width:110px">
+            <option value="">Ancho...</option>
+            ${anchos.map(a=>`<option value="${a}">${a}</option>`).join('')}
+            <option value="manual">✎ A mano</option>
+          </select>
+          <button class="btn ghost sm" id="prodcatAgregarFila">+ Agregar medida</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+      <table class="prodcat-grid">
+        <thead><tr>
+          <th>Ancho</th><th>Alto</th><th>Tela</th><th>Estrella</th><th>Vaina/<br>Huincha</th><th>Argollas</th>
+          <th>Armado</th><th>Cortado</th><th>Festo-<br>neado</th><th>Limpieza</th><th>Sublimado</th>
+          <th>Costo real</th><th></th>
+        </tr></thead>
+        <tbody id="prodcatFilas">${
+          filas.length? filas.map(({f,i})=>filaProductoCatalogoHTML2(producto,f,i)).join('')
+          : `<tr><td colspan="13" class="muted" style="text-align:center;padding:16px">Sin medidas todavía — agrega una con "+ Agregar medida".</td></tr>`
+        }</tbody>
+      </table>
+      </div>
+    </div>`;
+}
+function filaProductoCatalogoHTML2(producto, f, i){
+  const r=calcularFilaProducto2(producto, f);
+  const esHuincha=r.esHuincha;
+  return `<tr data-idx="${i}">
+    <td>${formatNumCL(f.ancho,2)}</td>
+    <td><input class="pf-alto" type="text" inputmode="decimal" value="${formatNumCL(f.alto,2)}" style="width:56px"></td>
+    <td><input class="pf-telacosto" type="number" step="1" value="${r.telaCosto}" style="width:64px"></td>
+    <td><input class="pf-creacosto" type="number" step="1" value="${r.creaCosto}" style="width:64px"></td>
+    <td><input class="pf-huinchacosto" type="number" step="1" value="${esHuincha?r.huinchaCosto:r.vainaCosto}" style="width:64px"></td>
+    <td><input class="pf-argollacosto" type="number" step="1" value="${r.argollaCosto}" style="width:64px" ${esHuincha?'':'disabled'}></td>
+    <td><input class="pf-armadocosto" type="number" step="1" value="${r.armadoCosto}" style="width:64px"></td>
+    <td><input class="pf-cortadocosto" type="number" step="1" value="${r.cortadoCosto}" style="width:64px"></td>
+    <td><input class="pf-estrellacosto" type="number" step="1" value="${r.estrellaCosto}" style="width:64px"></td>
+    <td><input class="pf-limpiezacosto" type="number" step="1" value="${r.limpiezaCosto}" style="width:64px"></td>
+    <td><input class="pf-sublimadocosto" type="number" step="1" value="${r.sublimadoCosto}" style="width:64px" ${r.sublimadoAplica?'':'disabled'}></td>
+    <td class="pf-costoreal" style="font-weight:700;white-space:nowrap">${money(r.costoReal)}</td>
+    <td><button class="btn danger sm pf-del" type="button" title="Eliminar medida">✕</button></td>
+  </tr>`;
 }
 function cambiarEstadoCotizacion2(id, estado){
   const c=COSTOS2.cotizaciones.find(x=>x.id===id); if(!c) return;
@@ -3631,7 +3741,6 @@ function renderDetalleCotizacion2(c){
     <div class="full-bleed">
       <div class="row" style="margin-top:16px">
         <button class="btn ghost sm" id="addItemCot2">+ Agregar ítem</button>
-        <button class="btn ghost sm" onclick="abrirBuscarCatalogo2()">🔍 Buscar en catálogo</button>
       </div>
 
       <div class="panel" style="margin-top:16px">
@@ -3961,146 +4070,50 @@ function bindDetalleCotizacion2(){
   const buscarInput=$('#buscarAnteriorInput2');
   if(buscarInput) buscarInput.addEventListener('keydown', e=>{ if(e.key==='Enter') buscarItemsAnteriores2(); });
 }
-/* ---------- Costeo por Producto: interacción del mantenedor ----------
-   Mismo comportamiento que los ítems de una cotización (Ancho→Alto automático,
-   Vaina/Huincha, foto, Insumos), pero apuntando a #catalogoList2 y guardando en
-   CATALOGO2 en vez de en la cotización. Cada tarjeta guarda su índice real en
-   data-idx — al filtrar con el buscador no calzan las posiciones del DOM con las
-   del arreglo, así que siempre se usa data-idx, nunca la posición visual. */
-function commitCatalogoDesdeDOM2(){
-  document.querySelectorAll('#catalogoList2 .item-card').forEach(card=>{
-    const idx=+card.dataset.idx;
-    if(CATALOGO2.productos[idx]) CATALOGO2.productos[idx]=leerItemDeCard2(card);
+/* ---------- Costeo por Producto: interacción del mantenedor tipo grilla ----------
+   Cada producto tiene atributos fijos (tipo, tela, vaina, especificación) y una grilla
+   con una fila por medida. Al crear una fila se usa calcularFilaProducto2() (mismo motor
+   que el resto del módulo) para rellenar los costos por defecto desde los mantenedores de
+   tarifas; de ahí en adelante cada celda queda con su valor concreto, editable a mano. */
+function agregarFilaProducto2(producto, ancho, alto){
+  const r=calcularFilaProducto2(producto, {ancho, alto});
+  producto.filas.push({
+    ancho, alto,
+    telaCosto:r.telaCosto, creaCosto:r.creaCosto,
+    huinchaCosto:r.esHuincha?r.huinchaCosto:undefined,
+    vainaCosto:r.esHuincha?undefined:r.vainaCosto,
+    argollaCosto:r.argollaCosto, argollaExtra:0,
+    armadoCosto:r.armadoCosto, cortadoCosto:r.cortadoCosto, estrellaCosto:r.estrellaCosto,
+    limpiezaCosto:r.limpiezaCosto, sublimadoCosto:r.sublimadoCosto,
   });
 }
+function leerFilaOverridesDeTr2(tr, filaOriginal){
+  return {
+    ancho:filaOriginal.ancho,
+    alto:parseNumCL(tr.querySelector('.pf-alto').value),
+    telaCosto:+tr.querySelector('.pf-telacosto').value||0,
+    creaCosto:+tr.querySelector('.pf-creacosto').value||0,
+    huinchaCosto:+tr.querySelector('.pf-huinchacosto').value||0,
+    vainaCosto:+tr.querySelector('.pf-huinchacosto').value||0,
+    argollaCosto:+tr.querySelector('.pf-argollacosto').value||0,
+    argollaExtra:filaOriginal.argollaExtra||0,
+    armadoCosto:+tr.querySelector('.pf-armadocosto').value||0,
+    cortadoCosto:+tr.querySelector('.pf-cortadocosto').value||0,
+    estrellaCosto:+tr.querySelector('.pf-estrellacosto').value||0,
+    limpiezaCosto:+tr.querySelector('.pf-limpiezacosto').value||0,
+    sublimadoCosto:+tr.querySelector('.pf-sublimadocosto').value||0,
+  };
+}
+function recalcFilaProductoCatalogo2(producto, tr){
+  const idx=+tr.dataset.idx;
+  const filaOriginal=producto.filas[idx]; if(!filaOriginal) return;
+  const nuevaFila=leerFilaOverridesDeTr2(tr, filaOriginal);
+  producto.filas[idx]=nuevaFila;
+  const r=calcularFilaProducto2(producto, nuevaFila);
+  tr.querySelector('.pf-costoreal').textContent=money(r.costoReal);
+}
 function bindCatalogo2(){
-  const wrap=$('#catalogoList2'); if(!wrap) return;
-  const recalcCard=recalcCardDetalle2;
-  wrap.addEventListener('input', e=>{
-    const card=e.target.closest('.item-card'); if(!card) return;
-    catalogoSucio2=true;
-    if(e.target.classList.contains('ci-ancho')){
-      const altoInput=card.querySelector('.ci-alto');
-      if(altoInput.dataset.auto!=='0'){
-        const anchoVal=parseNumCL(e.target.value);
-        altoInput.value = anchoVal? formatNumCL(altoAutoDesdeAncho(anchoVal),2) : '';
-        altoInput.dataset.auto='1';
-        altoInput.style.color='var(--muted)';
-      }
-    } else if(e.target.classList.contains('ci-alto')){
-      e.target.dataset.auto='0';
-      e.target.style.color='';
-    }
-    recalcCard(card);
-  });
-  wrap.addEventListener('change', e=>{
-    const card=e.target.closest('.item-card'); if(!card) return;
-    catalogoSucio2=true;
-    if(e.target.classList.contains('ci-ancho')){
-      const altoInput=card.querySelector('.ci-alto');
-      if(altoInput.dataset.auto!=='0'){
-        const anchoVal=parseNumCL(e.target.value);
-        altoInput.value = anchoVal? formatNumCL(altoAutoDesdeAncho(anchoVal),2) : '';
-        altoInput.dataset.auto='1';
-        altoInput.style.color='var(--muted)';
-      }
-      recalcCard(card);
-    }
-    else if(e.target.classList.contains('ci-tipovaina')){
-      const idx=+card.dataset.idx;
-      const it=leerItemDeCard2(card);
-      delete it.huinchaCosto; delete it.vainaCosto; delete it.argollaCosto;
-      const panelAbierto=card.querySelector('.insumos-panel').classList.contains('abierto');
-      const div=document.createElement('div'); div.innerHTML=itemCardHTML2(it, idx);
-      const nuevaCard=div.firstElementChild;
-      if(panelAbierto){
-        nuevaCard.querySelector('.insumos-panel').classList.add('abierto');
-        nuevaCard.querySelector('.insumos-toggle').textContent='▴ Insumos';
-      }
-      wrap.replaceChild(nuevaCard, card);
-    }
-    else if(e.target.classList.contains('foto-file')){
-      const file=e.target.files[0]; if(!file) return;
-      comprimirImagen(file, dataUrl=>{
-        aplicarFotoACard2(card, dataUrl);
-        const tipo=card.querySelector('.ci-tipo').value.trim();
-        if(tipo){ FOTOS.items.push({id:uid(),nombre:tipo,img:dataUrl}); saveFotos(); }
-        toast('Foto agregada.');
-      });
-      e.target.value='';
-    }
-  });
-  wrap.addEventListener('dragover', e=>{
-    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
-    e.preventDefault();
-    dz.classList.add('drag-over');
-  });
-  wrap.addEventListener('dragleave', e=>{
-    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
-    dz.classList.remove('drag-over');
-  });
-  wrap.addEventListener('drop', e=>{
-    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
-    e.preventDefault();
-    dz.classList.remove('drag-over');
-    const card=e.target.closest('.item-card'); if(!card) return;
-    const file=e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if(!file){ return; }
-    if(!file.type || !file.type.startsWith('image/')){ toast('Arrastra un archivo de imagen.','error'); return; }
-    catalogoSucio2=true;
-    comprimirImagen(file, dataUrl=>{
-      aplicarFotoACard2(card, dataUrl);
-      const tipo=card.querySelector('.ci-tipo').value.trim();
-      if(tipo){ FOTOS.items.push({id:uid(),nombre:tipo,img:dataUrl}); saveFotos(); }
-      toast('Foto agregada.');
-    });
-  });
-  wrap.addEventListener('paste', e=>{
-    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
-    const card=e.target.closest('.item-card'); if(!card) return;
-    const items=(e.clipboardData && e.clipboardData.items) || [];
-    let file=null;
-    for(const it of items){ if(it.type && it.type.startsWith('image/')){ file=it.getAsFile(); break; } }
-    if(!file){ toast('No hay ninguna imagen copiada en el portapapeles.','error'); return; }
-    e.preventDefault();
-    catalogoSucio2=true;
-    comprimirImagen(file, dataUrl=>{
-      aplicarFotoACard2(card, dataUrl);
-      const tipo=card.querySelector('.ci-tipo').value.trim();
-      if(tipo){ FOTOS.items.push({id:uid(),nombre:tipo,img:dataUrl}); saveFotos(); }
-      toast('Foto pegada.');
-    });
-  });
-  wrap.addEventListener('click', e=>{
-    const card=e.target.closest('.item-card'); if(!card) return;
-    if(e.target.closest('.foto-preview')){
-      const tieneFoto=!!card.querySelector('.ci-foto').value;
-      if(tieneFoto){ catalogoSucio2=true; aplicarFotoACard2(card, ''); }
-      else { card.querySelector('.foto-file').click(); }
-    }
-    else if(e.target.classList.contains('insumos-toggle')){
-      const panel=card.querySelector('.insumos-panel');
-      const abrir=!panel.classList.contains('abierto');
-      panel.classList.toggle('abierto', abrir);
-      e.target.textContent=(abrir?'▴':'▾')+' Insumos';
-    }
-    else if(e.target.classList.contains('del-item')){
-      confirmDialog('¿Eliminar este producto del Costeo por Producto?', ()=>{
-        commitCatalogoDesdeDOM2();
-        CATALOGO2.productos.splice(+card.dataset.idx, 1);
-        catalogoSucio2=true;
-        render();
-      }, 'Eliminar');
-    }
-  });
-  wrap.addEventListener('focusout', e=>{
-    const card=e.target.closest('.item-card'); if(!card) return;
-    if(e.target.classList.contains('ci-ancho')||e.target.classList.contains('ci-alto')){
-      const v=e.target.value.trim();
-      e.target.value = v? formatNumCL(parseNumCL(v)) : '';
-      recalcCard(card);
-    }
-  });
+  if(catalogoDetalleId2){ bindProductoCatalogo2(); return; }
   const buscarInput=$('#catalogoBuscar2');
   if(buscarInput) buscarInput.addEventListener('input', e=>{
     catalogo2Buscar=e.target.value;
@@ -4111,18 +4124,71 @@ function bindCatalogo2(){
   });
   const addBtn=$('#addCatalogo2');
   if(addBtn) addBtn.onclick=()=>{
-    commitCatalogoDesdeDOM2();
-    CATALOGO2.productos.push(itemNuevo2());
+    const p=productoNuevo2();
+    CATALOGO2.productos.push(p);
     catalogoSucio2=true;
-    catalogo2Buscar='';
+    catalogoDetalleId2=p.id;
+    render();
+  };
+}
+function bindProductoCatalogo2(){
+  const producto=CATALOGO2.productos.find(x=>x.id===catalogoDetalleId2); if(!producto) return;
+  const nombreInput=$('.prodcat-nombre');
+  if(nombreInput) nombreInput.addEventListener('input', e=>{ producto.nombre=e.target.value; catalogoSucio2=true; });
+  const tipoProductoSel=$('.prodcat-tipoproducto');
+  if(tipoProductoSel) tipoProductoSel.addEventListener('change', e=>{ producto.tipoProducto=e.target.value; catalogoSucio2=true; });
+  const tipoTelaSel=$('.prodcat-tipotela');
+  if(tipoTelaSel) tipoTelaSel.addEventListener('change', e=>{ producto.tipoTela=e.target.value; catalogoSucio2=true; render(); });
+  const tipoVainaSel=$('.prodcat-tipovaina');
+  if(tipoVainaSel) tipoVainaSel.addEventListener('change', e=>{ producto.tipoVaina=e.target.value; catalogoSucio2=true; render(); });
+  const tipoAcabadoSel=$('.prodcat-tipoacabado');
+  if(tipoAcabadoSel) tipoAcabadoSel.addEventListener('change', e=>{ producto.tipoAcabado=e.target.value; catalogoSucio2=true; render(); });
+
+  const tbody=$('#prodcatFilas');
+  if(tbody){
+    tbody.addEventListener('input', e=>{
+      const tr=e.target.closest('tr'); if(!tr) return;
+      catalogoSucio2=true;
+      recalcFilaProductoCatalogo2(producto, tr);
+    });
+    tbody.addEventListener('click', e=>{
+      if(!e.target.classList.contains('pf-del')) return;
+      const tr=e.target.closest('tr'); if(!tr) return;
+      const idx=+tr.dataset.idx;
+      confirmDialog('¿Eliminar esta medida?', ()=>{
+        producto.filas.splice(idx,1);
+        catalogoSucio2=true;
+        render();
+      }, 'Eliminar');
+    });
+  }
+
+  const addAnchoSel=$('#prodcatAgregarAncho');
+  const addFilaBtn=$('#prodcatAgregarFila');
+  if(addFilaBtn) addFilaBtn.onclick=()=>{
+    const val=addAnchoSel.value;
+    if(!val){ toast('Elige un ancho de la lista, o "A mano".','error'); return; }
+    let ancho;
+    if(val==='manual'){
+      const txt=prompt('Ancho (m), ej: 1,22');
+      if(!txt) return;
+      ancho=parseNumCL(txt);
+      if(!ancho){ toast('Ancho inválido.','error'); return; }
+    } else {
+      ancho=parseNumCL(val);
+    }
+    if(producto.filas.some(f=>Math.abs(f.ancho-ancho)<0.005)){ toast('Ese ancho ya está en la grilla.','error'); return; }
+    const alto=altoAutoDesdeAncho(ancho);
+    agregarFilaProducto2(producto, ancho, alto);
+    catalogoSucio2=true;
+    addAnchoSel.value='';
     render();
   };
   const guardarBtn=$('#guardarCatalogo2Btn');
   if(guardarBtn) guardarBtn.onclick=()=>{
-    commitCatalogoDesdeDOM2();
     saveCatalogo2();
     catalogoSucio2=false;
-    toast('Costeo por producto guardado.');
+    toast('Producto guardado.');
     render();
   };
 }
@@ -4189,52 +4255,10 @@ function copiarItemAnterior2(cotId, idx){
   toast('Ítem copiado abajo. Revisa los datos y presiona Guardar cambios.');
   nuevo.scrollIntoView({behavior:'smooth', block:'center'});
 }
-/* ---------- Buscar y traer un producto ya costeado del Costeo por Producto ---------- */
-function abrirBuscarCatalogo2(){
-  const bg=document.createElement('div'); bg.className='confirm-bg';
-  bg.innerHTML=`<div class="confirm-box wide">
-    <div class="row between"><h2 style="margin:0">Buscar en Costeo por Producto</h2><button class="btn ghost sm" id="catBuscarClose" type="button">Cerrar</button></div>
-    <input type="text" id="catBuscarInput" placeholder="Ej: bandera chilena 3x2, institucional aplicada..." style="margin:12px 0">
-    <div id="catBuscarResultados" style="max-height:50vh;overflow-y:auto"></div>
-  </div>`;
-  document.body.appendChild(bg);
-  function renderResultados(q){
-    const qn=normalizarNombre(q||'');
-    const lista=CATALOGO2.productos.map((p,i)=>({p,i}))
-      .filter(({p})=>!qn || normalizarNombre(`${p.tipo} ${p.tipoProducto} ${p.ancho} ${p.alto} ${p.tipoTela}`).includes(qn));
-    const div=bg.querySelector('#catBuscarResultados');
-    if(!lista.length){
-      div.innerHTML=`<div class="muted" style="padding:10px 0">${CATALOGO2.productos.length? 'Sin resultados.' : 'El Costeo por Producto está vacío — agrega productos desde esa pestaña.'}</div>`;
-      return;
-    }
-    div.innerHTML=lista.map(({p,i})=>{
-      const costo=calcularItem2(p).subtotalA;
-      return `<div class="row between resultado-ant">
-        <div>${p.foto?`<img class="resultado-thumb" src="${esc(p.foto)}">`:''}
-          <b>${esc(p.tipo||'(sin nombre)')}</b> — ${esc(p.ancho||'')} x ${esc(p.alto||'')} · ${esc(p.tipoTela||'')}
-          <span class="muted"> · Costo real ${money(costo)}</span></div>
-        <button class="btn ok sm" onclick="agregarDesdeCatalogo2(${i});this.closest('.confirm-bg').remove()">Agregar</button>
-      </div>`;
-    }).join('');
-  }
-  renderResultados('');
-  bg.querySelector('#catBuscarInput').addEventListener('input', e=>renderResultados(e.target.value));
-  bg.querySelector('#catBuscarClose').onclick=()=>bg.remove();
-  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
-}
-function agregarDesdeCatalogo2(idx){
-  const src=CATALOGO2.productos[idx]; if(!src) return;
-  const clone=JSON.parse(JSON.stringify(src));
-  const wrap=$('#itemsCot2'); if(!wrap) return;
-  const div=document.createElement('div');
-  div.innerHTML=itemCardHTML2(clone, wrap.children.length);
-  const nuevo=div.firstElementChild;
-  wrap.appendChild(nuevo);
-  marcarSucia2();
-  recalcTotalesDetalle2();
-  toast('Producto agregado desde el catálogo. Presiona Guardar cambios.');
-  nuevo.scrollIntoView({behavior:'smooth', block:'center'});
-}
+/* La búsqueda "traer un producto del Costeo por Producto a una cotización" se
+   rehace más adelante, ahora que el catálogo pasó a ser una grilla por producto
+   (Nombre/Tipo/Tela/Vaina + una fila por medida) en vez de una lista plana de
+   ítems — pendiente, no es parte de esta entrega. */
 function guardarItemsCotizacion2(){
   const items=leerItemsDesdeDOM2();
   const c=COSTOS2.cotizaciones.find(x=>x.id===detalleCotId2); if(!c) return;
