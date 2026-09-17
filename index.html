@@ -694,6 +694,7 @@ function render(){
   }
   if(current==='costos2'){
     if(costosView2==='detalle') bindDetalleCotizacion2();
+    else if(costos2Tab==='catalogo') bindCatalogo2();
     else bindCostosForm2();
   }
   if(current==='mercado') bindMercadoForm();
@@ -1404,11 +1405,14 @@ function advertirSalidaSiSucia(cb){
     confirmDialog('Tienes cambios sin guardar en esta cotización. ¿Quieres salir sin guardarlos?', ()=>{ cotizacionSucia=false; cb(); }, 'Salir sin guardar');
   } else if(current==='costos2' && costosView2==='detalle' && cotizacionSucia2){
     confirmDialog('Tienes cambios sin guardar en esta cotización. ¿Quieres salir sin guardarlos?', ()=>{ cotizacionSucia2=false; cb(); }, 'Salir sin guardar');
+  } else if(current==='costos2' && costosView2==='lista' && costos2Tab==='catalogo' && catalogoSucio2){
+    confirmDialog('Tienes cambios sin guardar en el Costeo por Producto. ¿Quieres salir sin guardarlos?', ()=>{ catalogoSucio2=false; cb(); }, 'Salir sin guardar');
   } else cb();
 }
 window.addEventListener('beforeunload', e=>{
   if((current==='costos' && costosView==='detalle' && cotizacionSucia)
     || (current==='costos2' && costosView2==='detalle' && cotizacionSucia2)
+    || (current==='costos2' && costosView2==='lista' && costos2Tab==='catalogo' && catalogoSucio2)
     || costosFormularioSucio()){ e.preventDefault(); e.returnValue=''; }
 });
 function backupCostos(){
@@ -3113,6 +3117,20 @@ let draftEditOrig2=null; // id original mientras se edita una cotización existe
 let cfFormAbierto2=false; // el formulario "Datos del cliente" parte minimizado; se abre al apretarlo
 let costosView2='lista'; // 'lista' | 'detalle'
 let detalleCotId2=null;
+let costos2Tab='cotizaciones'; // 'cotizaciones' | 'catalogo' — submenú dentro de Costos y Cotizaciones 2
+
+/* ---------- Costeo por Producto: mantenedor de banderas ya costeadas, sin flete ni margen ----------
+   Se arma la cotización a partir de esto (buscar → agregar). Guardado solo en este
+   navegador por ahora (mismo alcance que el resto del módulo de pruebas). */
+const KEY_CATALOGO2='taller_gary_catalogo2_v1';
+function loadCatalogo2(){
+  try{ const raw=localStorage.getItem(KEY_CATALOGO2); if(raw) return JSON.parse(raw); }catch(e){ console.error(e); }
+  return {v:1, productos:[]};
+}
+function saveCatalogo2(){ localStorage.setItem(KEY_CATALOGO2, JSON.stringify(CATALOGO2)); }
+let CATALOGO2=loadCatalogo2();
+let catalogoSucio2=false;
+let catalogo2Buscar='';
 function money(n){ n=Math.round(+n||0); const s=Math.abs(n).toLocaleString('es-CL'); return (n<0?'-$':'$')+s; }
 /* Porcentaje limpio para inputs: 10 en vez de 10.0, pero conserva decimales reales (ej: 12.5) */
 function formatPct(frac){ return +((+frac||0)*100).toFixed(2); }
@@ -3168,10 +3186,6 @@ function renderCostos2(m){
   }
   if(!draftCliente2) nuevoDraftCliente2();
   const editando = !!draftEditOrig2;
-  const all=[...COSTOS2.cotizaciones].sort((a,b)=>b.id.localeCompare(a.id));
-  const pendientes=all.filter(c=>(c.estado||'Pendiente')==='Pendiente');
-  const aceptadas=all.filter(c=>c.estado==='Aceptada');
-  const rechazadas=all.filter(c=>c.estado==='Rechazada');
   return `
     <div class="backlink" onclick="go('inicio')">← Volver al inicio</div>
     <div class="page-head">
@@ -3188,6 +3202,19 @@ function renderCostos2(m){
         <input type="file" id="cotRestoreFile" accept=".json" style="display:none" onchange="restoreCostosFile2(this)">
       </div>
     </div>
+
+    <div class="prod-tabs" style="margin-bottom:16px">
+      <button class="${costos2Tab==='cotizaciones'?'active':''}" onclick="costos2Tab='cotizaciones';render()">🧾 Cotizaciones</button>
+      <button class="${costos2Tab==='catalogo'?'active':''}" onclick="costos2Tab='catalogo';render()">📦 Costeo por Producto</button>
+    </div>
+    ${costos2Tab==='catalogo' ? renderCatalogo2() : renderListaCotizaciones2({editando})}`;
+}
+function renderListaCotizaciones2({editando}){
+  const all=[...COSTOS2.cotizaciones].sort((a,b)=>b.id.localeCompare(a.id));
+  const pendientes=all.filter(c=>(c.estado||'Pendiente')==='Pendiente');
+  const aceptadas=all.filter(c=>c.estado==='Aceptada');
+  const rechazadas=all.filter(c=>c.estado==='Rechazada');
+  return `
 
     ${(editando||cfFormAbierto2) ? `
     <div class="panel cf-panel">
@@ -3260,6 +3287,26 @@ function renderCostos2(m){
     </div>`;
 }
 
+/* ---------- Costeo por Producto: vista del mantenedor ---------- */
+function renderCatalogo2(){
+  const q=normalizarNombre(catalogo2Buscar||'');
+  const productos=CATALOGO2.productos.map((p,i)=>({p,i}))
+    .filter(({p})=>!q || normalizarNombre(`${p.tipo} ${p.tipoProducto} ${p.ancho} ${p.alto} ${p.tipoTela}`).includes(q));
+  return `
+    <div class="panel" style="margin-bottom:16px">
+      <h2 style="margin:0 0 4px">📦 Costeo por Producto</h2>
+      <div class="muted" style="font-size:13px;margin-bottom:12px">Banderas ya costeadas por medida — Tela, Estrella, Vaina/Huincha, Argollas y Confección, <b>sin flete, financiero, margen ni IVA</b>. Desde acá se buscan y traen los productos al armar una cotización.</div>
+      <div class="row" style="gap:8px">
+        <input type="text" id="catalogoBuscar2" value="${esc(catalogo2Buscar||'')}" placeholder="Buscar por nombre, tipo, medida o tela..." style="flex:1;min-width:200px">
+        <button class="btn ghost sm" id="addCatalogo2">+ Agregar producto</button>
+        <button class="btn sm" id="guardarCatalogo2Btn">💾 Guardar cambios</button>
+      </div>
+    </div>
+    <div id="catalogoList2" class="full-bleed" style="display:flex;flex-direction:column;gap:16px">${
+      productos.length? productos.map(({p,i})=>itemCardHTML2(p,i)).join('')
+      : `<div class="panel muted" style="text-align:center">${CATALOGO2.productos.length? 'Sin resultados para esa búsqueda.' : 'Todavía no hay productos costeados. Apreta "+ Agregar producto" para empezar.'}</div>`
+    }</div>`;
+}
 function cambiarEstadoCotizacion2(id, estado){
   const c=COSTOS2.cotizaciones.find(x=>x.id===id); if(!c) return;
   c.estado=estado; saveCostos2(); render();
@@ -3549,8 +3596,10 @@ function itemCardHTML2(it, i){
         <input class="ci-alto" type="text" inputmode="decimal" value="${esc(it.alto||'')}" placeholder="Alto" data-auto="${altoAuto?'1':'0'}" style="width:74px;text-align:center${altoAuto?';color:var(--muted)':''}">
       </div>
       <select class="ci-tipotela" style="flex:0 0 140px;width:140px" title="Tela">${TIPOS_TELA2.map(tl=>`<option ${((it.tipoTela||'Bistrech')===tl)?'selected':''}>${tl}</option>`).join('')}</select>
+      <input class="ci-cant" type="number" min="1" step="1" value="${it.cantidad||1}" title="Cantidad" style="flex:0 0 46px;width:46px;text-align:center">
       <button class="btn ghost sm insumos-toggle" type="button">▾ Insumos</button>
       <div class="insumos-total-badge">Insumos: <b class="ins-total-badge">${money(calcularInsumos2(it).subtotalInsumos)}</b></div>
+      <div class="insumos-total-badge" title="Tela+Estrella+Vaina/Huincha+Argollas+Confección (Armado/Cortado/Festoneado/Limpieza/Sublimado) — sin flete, financiero, margen ni IVA">Costo real: <b class="costoreal-badge">${money(calcularItem2(it).subtotalA)}</b></div>
     </div>
     ${insumosPanelHTML2(it)}
     </div>
@@ -3582,6 +3631,7 @@ function renderDetalleCotizacion2(c){
     <div class="full-bleed">
       <div class="row" style="margin-top:16px">
         <button class="btn ghost sm" id="addItemCot2">+ Agregar ítem</button>
+        <button class="btn ghost sm" onclick="abrirBuscarCatalogo2()">🔍 Buscar en catálogo</button>
       </div>
 
       <div class="panel" style="margin-top:16px">
@@ -3604,6 +3654,7 @@ function leerItemDeCard2(card){
     tipo:card.querySelector('.ci-tipo').value.trim(),
     foto:card.querySelector('.ci-foto').value||'',
     tipoProducto:card.querySelector('.ci-tipoproducto').value,
+    cantidad:+card.querySelector('.ci-cant').value||1,
     ancho:card.querySelector('.ci-ancho').value,
     alto:card.querySelector('.ci-alto').value,
     medida:(card.querySelector('.ci-ancho').value && card.querySelector('.ci-alto').value)
@@ -3623,8 +3674,10 @@ function leerItemsDesdeDOM2(){
   return [...document.querySelectorAll('#itemsCot2 .item-card')].map(leerItemDeCard2);
 }
 function recalcCardDetalle2(card){
-  const wrap=$('#itemsCot2'); if(!wrap) return;
-  const it=leerItemsDesdeDOM2()[[...wrap.children].indexOf(card)];
+  // Se lee la tarjeta directo (sin depender de en qué lista esté montada), así sirve
+  // tanto para los ítems de una cotización (#itemsCot2) como para las filas del
+  // Costeo por Producto (#catalogoList2).
+  const it=leerItemDeCard2(card);
   if(!it) return;
   const r=calcularInsumos2(it);
   card.querySelector('.ins-tela-cant').textContent=formatNumCL(r.telaCant,1);
@@ -3638,6 +3691,7 @@ function recalcCardDetalle2(card){
   card.querySelector('.ci-argollacosto').disabled=!r.esHuincha;
   card.querySelector('.ins-subtotal').textContent=money(r.subtotalInsumos);
   card.querySelector('.ins-total-badge').textContent=money(r.subtotalInsumos);
+  card.querySelector('.costoreal-badge').textContent=money(calcularItem2(it).subtotalA);
 }
 function recalcTotalesDetalle2(){
   const items=leerItemsDesdeDOM2();
@@ -3907,6 +3961,171 @@ function bindDetalleCotizacion2(){
   const buscarInput=$('#buscarAnteriorInput2');
   if(buscarInput) buscarInput.addEventListener('keydown', e=>{ if(e.key==='Enter') buscarItemsAnteriores2(); });
 }
+/* ---------- Costeo por Producto: interacción del mantenedor ----------
+   Mismo comportamiento que los ítems de una cotización (Ancho→Alto automático,
+   Vaina/Huincha, foto, Insumos), pero apuntando a #catalogoList2 y guardando en
+   CATALOGO2 en vez de en la cotización. Cada tarjeta guarda su índice real en
+   data-idx — al filtrar con el buscador no calzan las posiciones del DOM con las
+   del arreglo, así que siempre se usa data-idx, nunca la posición visual. */
+function commitCatalogoDesdeDOM2(){
+  document.querySelectorAll('#catalogoList2 .item-card').forEach(card=>{
+    const idx=+card.dataset.idx;
+    if(CATALOGO2.productos[idx]) CATALOGO2.productos[idx]=leerItemDeCard2(card);
+  });
+}
+function bindCatalogo2(){
+  const wrap=$('#catalogoList2'); if(!wrap) return;
+  const recalcCard=recalcCardDetalle2;
+  wrap.addEventListener('input', e=>{
+    const card=e.target.closest('.item-card'); if(!card) return;
+    catalogoSucio2=true;
+    if(e.target.classList.contains('ci-ancho')){
+      const altoInput=card.querySelector('.ci-alto');
+      if(altoInput.dataset.auto!=='0'){
+        const anchoVal=parseNumCL(e.target.value);
+        altoInput.value = anchoVal? formatNumCL(altoAutoDesdeAncho(anchoVal),2) : '';
+        altoInput.dataset.auto='1';
+        altoInput.style.color='var(--muted)';
+      }
+    } else if(e.target.classList.contains('ci-alto')){
+      e.target.dataset.auto='0';
+      e.target.style.color='';
+    }
+    recalcCard(card);
+  });
+  wrap.addEventListener('change', e=>{
+    const card=e.target.closest('.item-card'); if(!card) return;
+    catalogoSucio2=true;
+    if(e.target.classList.contains('ci-ancho')){
+      const altoInput=card.querySelector('.ci-alto');
+      if(altoInput.dataset.auto!=='0'){
+        const anchoVal=parseNumCL(e.target.value);
+        altoInput.value = anchoVal? formatNumCL(altoAutoDesdeAncho(anchoVal),2) : '';
+        altoInput.dataset.auto='1';
+        altoInput.style.color='var(--muted)';
+      }
+      recalcCard(card);
+    }
+    else if(e.target.classList.contains('ci-tipovaina')){
+      const idx=+card.dataset.idx;
+      const it=leerItemDeCard2(card);
+      delete it.huinchaCosto; delete it.vainaCosto; delete it.argollaCosto;
+      const panelAbierto=card.querySelector('.insumos-panel').classList.contains('abierto');
+      const div=document.createElement('div'); div.innerHTML=itemCardHTML2(it, idx);
+      const nuevaCard=div.firstElementChild;
+      if(panelAbierto){
+        nuevaCard.querySelector('.insumos-panel').classList.add('abierto');
+        nuevaCard.querySelector('.insumos-toggle').textContent='▴ Insumos';
+      }
+      wrap.replaceChild(nuevaCard, card);
+    }
+    else if(e.target.classList.contains('foto-file')){
+      const file=e.target.files[0]; if(!file) return;
+      comprimirImagen(file, dataUrl=>{
+        aplicarFotoACard2(card, dataUrl);
+        const tipo=card.querySelector('.ci-tipo').value.trim();
+        if(tipo){ FOTOS.items.push({id:uid(),nombre:tipo,img:dataUrl}); saveFotos(); }
+        toast('Foto agregada.');
+      });
+      e.target.value='';
+    }
+  });
+  wrap.addEventListener('dragover', e=>{
+    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
+    e.preventDefault();
+    dz.classList.add('drag-over');
+  });
+  wrap.addEventListener('dragleave', e=>{
+    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
+    dz.classList.remove('drag-over');
+  });
+  wrap.addEventListener('drop', e=>{
+    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+    const card=e.target.closest('.item-card'); if(!card) return;
+    const file=e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(!file){ return; }
+    if(!file.type || !file.type.startsWith('image/')){ toast('Arrastra un archivo de imagen.','error'); return; }
+    catalogoSucio2=true;
+    comprimirImagen(file, dataUrl=>{
+      aplicarFotoACard2(card, dataUrl);
+      const tipo=card.querySelector('.ci-tipo').value.trim();
+      if(tipo){ FOTOS.items.push({id:uid(),nombre:tipo,img:dataUrl}); saveFotos(); }
+      toast('Foto agregada.');
+    });
+  });
+  wrap.addEventListener('paste', e=>{
+    const dz=e.target.closest && e.target.closest('.foto-preview'); if(!dz) return;
+    const card=e.target.closest('.item-card'); if(!card) return;
+    const items=(e.clipboardData && e.clipboardData.items) || [];
+    let file=null;
+    for(const it of items){ if(it.type && it.type.startsWith('image/')){ file=it.getAsFile(); break; } }
+    if(!file){ toast('No hay ninguna imagen copiada en el portapapeles.','error'); return; }
+    e.preventDefault();
+    catalogoSucio2=true;
+    comprimirImagen(file, dataUrl=>{
+      aplicarFotoACard2(card, dataUrl);
+      const tipo=card.querySelector('.ci-tipo').value.trim();
+      if(tipo){ FOTOS.items.push({id:uid(),nombre:tipo,img:dataUrl}); saveFotos(); }
+      toast('Foto pegada.');
+    });
+  });
+  wrap.addEventListener('click', e=>{
+    const card=e.target.closest('.item-card'); if(!card) return;
+    if(e.target.closest('.foto-preview')){
+      const tieneFoto=!!card.querySelector('.ci-foto').value;
+      if(tieneFoto){ catalogoSucio2=true; aplicarFotoACard2(card, ''); }
+      else { card.querySelector('.foto-file').click(); }
+    }
+    else if(e.target.classList.contains('insumos-toggle')){
+      const panel=card.querySelector('.insumos-panel');
+      const abrir=!panel.classList.contains('abierto');
+      panel.classList.toggle('abierto', abrir);
+      e.target.textContent=(abrir?'▴':'▾')+' Insumos';
+    }
+    else if(e.target.classList.contains('del-item')){
+      confirmDialog('¿Eliminar este producto del Costeo por Producto?', ()=>{
+        commitCatalogoDesdeDOM2();
+        CATALOGO2.productos.splice(+card.dataset.idx, 1);
+        catalogoSucio2=true;
+        render();
+      }, 'Eliminar');
+    }
+  });
+  wrap.addEventListener('focusout', e=>{
+    const card=e.target.closest('.item-card'); if(!card) return;
+    if(e.target.classList.contains('ci-ancho')||e.target.classList.contains('ci-alto')){
+      const v=e.target.value.trim();
+      e.target.value = v? formatNumCL(parseNumCL(v)) : '';
+      recalcCard(card);
+    }
+  });
+  const buscarInput=$('#catalogoBuscar2');
+  if(buscarInput) buscarInput.addEventListener('input', e=>{
+    catalogo2Buscar=e.target.value;
+    const pos=e.target.selectionStart;
+    render();
+    const nuevoInput=$('#catalogoBuscar2');
+    if(nuevoInput){ nuevoInput.focus(); nuevoInput.setSelectionRange(pos,pos); }
+  });
+  const addBtn=$('#addCatalogo2');
+  if(addBtn) addBtn.onclick=()=>{
+    commitCatalogoDesdeDOM2();
+    CATALOGO2.productos.push(itemNuevo2());
+    catalogoSucio2=true;
+    catalogo2Buscar='';
+    render();
+  };
+  const guardarBtn=$('#guardarCatalogo2Btn');
+  if(guardarBtn) guardarBtn.onclick=()=>{
+    commitCatalogoDesdeDOM2();
+    saveCatalogo2();
+    catalogoSucio2=false;
+    toast('Costeo por producto guardado.');
+    render();
+  };
+}
 function buscarItemsAnteriores2(){
   const q=normalizarNombre($('#buscarAnteriorInput2').value);
   const resDiv=$('#resultadosAnteriores'); if(!resDiv) return;
@@ -3968,6 +4187,52 @@ function copiarItemAnterior2(cotId, idx){
   wrap.appendChild(nuevo);
   recalcTotalesDetalle2();
   toast('Ítem copiado abajo. Revisa los datos y presiona Guardar cambios.');
+  nuevo.scrollIntoView({behavior:'smooth', block:'center'});
+}
+/* ---------- Buscar y traer un producto ya costeado del Costeo por Producto ---------- */
+function abrirBuscarCatalogo2(){
+  const bg=document.createElement('div'); bg.className='confirm-bg';
+  bg.innerHTML=`<div class="confirm-box wide">
+    <div class="row between"><h2 style="margin:0">Buscar en Costeo por Producto</h2><button class="btn ghost sm" id="catBuscarClose" type="button">Cerrar</button></div>
+    <input type="text" id="catBuscarInput" placeholder="Ej: bandera chilena 3x2, institucional aplicada..." style="margin:12px 0">
+    <div id="catBuscarResultados" style="max-height:50vh;overflow-y:auto"></div>
+  </div>`;
+  document.body.appendChild(bg);
+  function renderResultados(q){
+    const qn=normalizarNombre(q||'');
+    const lista=CATALOGO2.productos.map((p,i)=>({p,i}))
+      .filter(({p})=>!qn || normalizarNombre(`${p.tipo} ${p.tipoProducto} ${p.ancho} ${p.alto} ${p.tipoTela}`).includes(qn));
+    const div=bg.querySelector('#catBuscarResultados');
+    if(!lista.length){
+      div.innerHTML=`<div class="muted" style="padding:10px 0">${CATALOGO2.productos.length? 'Sin resultados.' : 'El Costeo por Producto está vacío — agrega productos desde esa pestaña.'}</div>`;
+      return;
+    }
+    div.innerHTML=lista.map(({p,i})=>{
+      const costo=calcularItem2(p).subtotalA;
+      return `<div class="row between resultado-ant">
+        <div>${p.foto?`<img class="resultado-thumb" src="${esc(p.foto)}">`:''}
+          <b>${esc(p.tipo||'(sin nombre)')}</b> — ${esc(p.ancho||'')} x ${esc(p.alto||'')} · ${esc(p.tipoTela||'')}
+          <span class="muted"> · Costo real ${money(costo)}</span></div>
+        <button class="btn ok sm" onclick="agregarDesdeCatalogo2(${i});this.closest('.confirm-bg').remove()">Agregar</button>
+      </div>`;
+    }).join('');
+  }
+  renderResultados('');
+  bg.querySelector('#catBuscarInput').addEventListener('input', e=>renderResultados(e.target.value));
+  bg.querySelector('#catBuscarClose').onclick=()=>bg.remove();
+  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
+}
+function agregarDesdeCatalogo2(idx){
+  const src=CATALOGO2.productos[idx]; if(!src) return;
+  const clone=JSON.parse(JSON.stringify(src));
+  const wrap=$('#itemsCot2'); if(!wrap) return;
+  const div=document.createElement('div');
+  div.innerHTML=itemCardHTML2(clone, wrap.children.length);
+  const nuevo=div.firstElementChild;
+  wrap.appendChild(nuevo);
+  marcarSucia2();
+  recalcTotalesDetalle2();
+  toast('Producto agregado desde el catálogo. Presiona Guardar cambios.');
   nuevo.scrollIntoView({behavior:'smooth', block:'center'});
 }
 function guardarItemsCotizacion2(){
