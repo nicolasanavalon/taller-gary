@@ -4156,6 +4156,7 @@ function bindCatalogo2(){
     const p=productoNuevo2();
     CATALOGO2.productos.push(p);
     catalogoSucio2=true;
+    saveCatalogo2();
     catalogoDetalleId2=p.id;
     render();
   };
@@ -4163,15 +4164,15 @@ function bindCatalogo2(){
 function bindProductoCatalogo2(){
   const producto=CATALOGO2.productos.find(x=>x.id===catalogoDetalleId2); if(!producto) return;
   const nombreInput=$('.prodcat-nombre');
-  if(nombreInput) nombreInput.addEventListener('input', e=>{ producto.nombre=e.target.value; catalogoSucio2=true; });
+  if(nombreInput) nombreInput.addEventListener('input', e=>{ producto.nombre=e.target.value; catalogoSucio2=true; saveCatalogo2(); });
   const tipoProductoSel=$('.prodcat-tipoproducto');
-  if(tipoProductoSel) tipoProductoSel.addEventListener('change', e=>{ producto.tipoProducto=e.target.value; catalogoSucio2=true; });
+  if(tipoProductoSel) tipoProductoSel.addEventListener('change', e=>{ producto.tipoProducto=e.target.value; catalogoSucio2=true; saveCatalogo2(); });
   const tipoTelaSel=$('.prodcat-tipotela');
-  if(tipoTelaSel) tipoTelaSel.addEventListener('change', e=>{ producto.tipoTela=e.target.value; catalogoSucio2=true; render(); });
+  if(tipoTelaSel) tipoTelaSel.addEventListener('change', e=>{ producto.tipoTela=e.target.value; catalogoSucio2=true; saveCatalogo2(); render(); });
   const tipoVainaSel=$('.prodcat-tipovaina');
-  if(tipoVainaSel) tipoVainaSel.addEventListener('change', e=>{ producto.tipoVaina=e.target.value; catalogoSucio2=true; render(); });
+  if(tipoVainaSel) tipoVainaSel.addEventListener('change', e=>{ producto.tipoVaina=e.target.value; catalogoSucio2=true; saveCatalogo2(); render(); });
   const tipoAcabadoSel=$('.prodcat-tipoacabado');
-  if(tipoAcabadoSel) tipoAcabadoSel.addEventListener('change', e=>{ producto.tipoAcabado=e.target.value; catalogoSucio2=true; render(); });
+  if(tipoAcabadoSel) tipoAcabadoSel.addEventListener('change', e=>{ producto.tipoAcabado=e.target.value; catalogoSucio2=true; saveCatalogo2(); render(); });
 
   const tbody=$('#prodcatFilas');
   if(tbody){
@@ -4179,6 +4180,7 @@ function bindProductoCatalogo2(){
       const tr=e.target.closest('tr'); if(!tr) return;
       catalogoSucio2=true;
       recalcFilaProductoCatalogo2(producto, tr);
+      saveCatalogo2();
     });
     tbody.addEventListener('click', e=>{
       if(!e.target.classList.contains('pf-del')) return;
@@ -4187,6 +4189,7 @@ function bindProductoCatalogo2(){
       confirmDialog('¿Eliminar esta medida?', ()=>{
         producto.filas.splice(idx,1);
         catalogoSucio2=true;
+        saveCatalogo2();
         render();
       }, 'Eliminar');
     });
@@ -4210,6 +4213,7 @@ function bindProductoCatalogo2(){
     const alto=altoAutoDesdeAncho(ancho);
     agregarFilaProducto2(producto, ancho, alto);
     catalogoSucio2=true;
+    saveCatalogo2();
     addAnchoSel.value='';
     render();
   };
