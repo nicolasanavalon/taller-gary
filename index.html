@@ -419,7 +419,7 @@
        achique si hace falta, en vez de empujar los botones fuera del bloque (arriba a la
        derecha es donde queda el espacio que se aprovecha para Subli/Apli/Anexo). */
     .prod-info-top .prod-item-producto{flex:1 1 140px;width:auto;min-width:90px}
-    .prod-info-actions{display:flex;gap:4px;flex-shrink:0;align-items:center}
+    .prod-info-actions{display:flex;flex-wrap:wrap;gap:4px;flex:1 1 100%;min-width:0;align-items:center;justify-content:flex-end}
     .prod-info-actions .prod-toggle-mini{padding:5px 8px;font-size:10.5px}
     .prod-info-specs{display:flex;flex-wrap:wrap;gap:6px}
     .prod-info-specs .prod-medida,.prod-info-specs .prod-tela{flex:1 1 90px;min-width:0}
@@ -451,6 +451,8 @@
       box-shadow:0 3px 10px rgba(14,124,102,.35)}
     .prod-toggle-mini.apli.on{background:#6d4aa8;border-color:#4f3179;color:#fff;
       box-shadow:0 3px 10px rgba(109,74,168,.35)}
+    .prod-toggle-mini.letti.on{background:#c9720e;border-color:#9c5709;color:#fff;
+      box-shadow:0 3px 10px rgba(201,114,14,.35)}
     .prod-mini{width:28px;height:28px}
     .prod-subtotal-card{background:var(--gold-soft);border-radius:12px;padding:10px 13px;font-size:12.5px;
       display:flex;justify-content:space-between;gap:10px;font-weight:700;box-shadow:inset 0 0 0 1px var(--gold-line)}
@@ -6572,6 +6574,7 @@ function prodItemCardHtml(r, conOt){
           <div class="prod-info-actions">
             <button class="prod-toggle-mini subli ${r.sublimacion?'on':''}" title="Subli" onclick="prodToggleFlag('${r.uid}','sublimacion')">🎨 Subli${r.sublimacion?' ✓':''}</button>
             <button class="prod-toggle-mini apli ${r.aplicada?'on':''}" title="Apli" onclick="prodToggleFlag('${r.uid}','aplicada')">🧵 Apli${r.aplicada?' ✓':''}</button>
+            <button class="prod-toggle-mini letti ${r.letti?'on':''}" title="Letti" onclick="prodToggleFlag('${r.uid}','letti')">🏷️ Letti${r.letti?' ✓':''}</button>
             ${prodAnexoHtml(r)}
           </div>
         </div>
@@ -7449,7 +7452,7 @@ function prodNuevaFila(){
   const fila={
     uid:prodNuevoUid(), ot:'', cliente:'', comuna:'', fCom:'', foto:'',
     producto:'', medida:'', tela:'', cant:'', obs:'', etapa:'',
-    sinOC:false, sublimacion:false, aplicada:false, entregada:false,
+    sinOC:false, sublimacion:false, aplicada:false, letti:false, entregada:false,
   };
   PRODUCCION.rows.push(fila);
   PRODUCCION.seq=(PRODUCCION.seq||1)+1;
