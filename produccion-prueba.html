@@ -343,10 +343,11 @@
   .prod-item:hover{background:rgba(184,134,11,.035)}
   .prod-item.entregada{opacity:.5}
   .prod-item.sel{background:var(--teal-soft)}
-  /* Cada tarjeta de producto se lee como 3 bloques bien separados: (1) foto+descripción+
-     medida/tela/cantidad juntos, (2) obs+status juntos, (3) Subli/Apli al final. Un fondo
-     y radio propios por bloque (en vez de solo texto suelto) son los que hacen que cada
-     grupo se sienta "un bloque" aunque no haya un borde grueso separándolos. */
+  /* Cada tarjeta de producto se lee como 2 bloques: (1) foto+descripción+medida/tela/
+     cantidad+Subli/Apli/Anexo (estos 3 últimos arriba a la derecha, aprovechando el
+     espacio que quedaba vacío junto a la descripción), y (2) obs+status, más apretado.
+     Un fondo y radio propios por bloque (en vez de solo texto suelto) son los que hacen
+     que cada grupo se sienta "un bloque" aunque no haya un borde grueso separándolos. */
   .prod-block{border-radius:10px;padding:7px 8px}
   /* align-items:stretch (no "center") es lo que deja que la foto, más abajo, se estire
      hasta ocupar todo el alto de este bloque — incluido el alto extra que gana cuando la
@@ -357,16 +358,25 @@
      queda pegada justo debajo de la descripción (no lejos, a la derecha del todo) y, a su
      vez, tela y cantidad van pegadas a la derecha de la medida dentro de esa misma fila. */
   .prod-info-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:5px;justify-content:center}
+  .prod-info-top{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap}
+  /* flex-basis:0 (en vez de "auto") + width:auto es lo que deja que la descripción se
+     achique si hace falta, en vez de empujar los botones fuera del bloque (arriba a la
+     derecha es donde quedaba el espacio vacío que se pidió aprovechar). */
+  .prod-info-top .prod-item-producto{flex:1 1 140px;width:auto;min-width:90px}
+  .prod-info-actions{display:flex;gap:4px;flex-shrink:0;align-items:center}
+  .prod-info-actions .prod-toggle-mini{padding:5px 8px;font-size:10.5px}
   .prod-info-specs{display:flex;flex-wrap:wrap;gap:6px}
   .prod-info-specs .prod-medida,.prod-info-specs .prod-tela{flex:1 1 90px;min-width:0}
   .prod-info-specs .prod-cant{flex:none;width:50px;text-align:center}
-  .prod-block-notes{display:flex;flex-direction:column;gap:4px;background:rgba(30,33,39,.02)}
-  .prod-block-flags{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+  /* Bloque de obs/status más apretado: menos padding, menos separación entre ambos campos
+     y cajas más bajas (ver textarea.prod-ta.compact más abajo). */
+  .prod-block-notes{display:flex;flex-direction:column;gap:3px;padding:5px 8px;background:rgba(30,33,39,.02)}
   .prod-item input,.prod-item textarea.prod-ta{width:100%;border:1px solid transparent;border-radius:7px;padding:5px 6px;
     font-size:12.5px;font-family:inherit;background:transparent}
   .prod-item input:hover,.prod-item textarea.prod-ta:hover{border-color:var(--line)}
   .prod-item input:focus,.prod-item textarea.prod-ta:focus{border-color:var(--gold);background:#fff;outline:none}
   .prod-item textarea.prod-ta{resize:none;overflow-y:auto;height:34px;line-height:1.35;display:block}
+  .prod-item textarea.prod-ta.compact{height:24px;padding:3px 6px}
   .prod-item textarea.prod-item-producto{height:auto;min-height:32px}
   /* Rectángulo (no cuadrado) que se estira al alto disponible del bloque — ver
      align-items:stretch arriba. El ancho se mantiene angosto a propósito para que se vea
@@ -6364,12 +6374,21 @@ function prodItemCardHtml(r, conOt){
     ${conOt? `<div class="prod-item-ot-tag">OT ${esc(r.ot)||'—'} · ${esc(r.cliente)||'(sin cliente)'}</div>` : ''}
     <!-- Bloque 1: foto (rectángulo que se estira al alto del bloque) + descripción (crece
          hacia abajo si es larga) + medida/tela/cantidad pegados justo debajo de la
-         descripción, todo dentro del mismo fondo para que se lea como un solo bloque. -->
+         descripción, todo dentro del mismo fondo para que se lea como un solo bloque.
+         Subli/Apli/Anexo van arriba a la derecha, aprovechando el espacio que quedaba
+         vacío junto a la descripción en vez de tener su propio bloque aparte. -->
     <div class="prod-block prod-block-info">
       <input type="checkbox" ${sel?'checked':''} onchange="prodToggleSeleccion('${r.uid}')">
       ${prodThumbHtml(r)}
       <div class="prod-info-main">
-        <textarea class="prod-ta prod-item-producto" rows="1" oninput="prodInput(this,'${r.uid}','producto')" placeholder="Producto">${esc(r.producto)}</textarea>
+        <div class="prod-info-top">
+          <textarea class="prod-ta prod-item-producto" rows="1" oninput="prodInput(this,'${r.uid}','producto')" placeholder="Producto">${esc(r.producto)}</textarea>
+          <div class="prod-info-actions">
+            <button class="prod-toggle-mini subli ${r.sublimacion?'on':''}" title="Subli" onclick="prodToggleFlag('${r.uid}','sublimacion')">🎨 Subli${r.sublimacion?' ✓':''}</button>
+            <button class="prod-toggle-mini apli ${r.aplicada?'on':''}" title="Apli" onclick="prodToggleFlag('${r.uid}','aplicada')">🧵 Apli${r.aplicada?' ✓':''}</button>
+            ${prodAnexoHtml(r)}
+          </div>
+        </div>
         <div class="prod-info-specs">
           <input class="prod-medida" value="${esc(r.medida)}" oninput="prodInput(this,'${r.uid}','medida')" placeholder="Medida">
           <input class="prod-tela" value="${esc(r.tela)}" oninput="prodInput(this,'${r.uid}','tela')" placeholder="Tela">
@@ -6377,16 +6396,10 @@ function prodItemCardHtml(r, conOt){
         </div>
       </div>
     </div>
-    <!-- Bloque 2: observación + status -->
+    <!-- Bloque 2: observación + status, más apretado -->
     <div class="prod-block prod-block-notes">
-      <textarea class="prod-ta" rows="1" oninput="prodInput(this,'${r.uid}','obs')" placeholder="Obs">${esc(r.obs)}</textarea>
-      <textarea class="prod-ta" rows="1" oninput="prodInput(this,'${r.uid}','etapa')" placeholder="Status">${esc(r.etapa)}</textarea>
-    </div>
-    <!-- Bloque 3: Subli / Apli -->
-    <div class="prod-block prod-block-flags">
-      <button class="prod-toggle-mini subli ${r.sublimacion?'on':''}" title="Subli" onclick="prodToggleFlag('${r.uid}','sublimacion')">🎨 Subli${r.sublimacion?' ✓':''}</button>
-      <button class="prod-toggle-mini apli ${r.aplicada?'on':''}" title="Apli" onclick="prodToggleFlag('${r.uid}','aplicada')">🧵 Apli${r.aplicada?' ✓':''}</button>
-      ${prodAnexoHtml(r)}
+      <textarea class="prod-ta compact" rows="1" oninput="prodInput(this,'${r.uid}','obs')" placeholder="Obs">${esc(r.obs)}</textarea>
+      <textarea class="prod-ta compact" rows="1" oninput="prodInput(this,'${r.uid}','etapa')" placeholder="Status">${esc(r.etapa)}</textarea>
     </div>
   </div>`;
 }
