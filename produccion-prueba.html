@@ -330,33 +330,37 @@
   .prod-ot-head .prod-ot-comuna{flex:1 1 90px;min-width:80px}
   .prod-ot-head .prod-ot-fecha{flex:none;width:124px}
   .prod-items{display:flex;flex-direction:column}
-  .prod-item{padding:9px 10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:5px;transition:background .15s}
+  .prod-item{padding:9px 10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:7px;transition:background .15s}
   .prod-item:hover{background:rgba(184,134,11,.035)}
   .prod-item.entregada{opacity:.5}
   .prod-item.sel{background:var(--teal-soft)}
-  /* Checkbox + foto + producto + acciones SIEMPRE en una sola fila: el textarea del
-     producto (min-width:0) es el que se achica si hace falta, nunca el que hace saltar
-     el resto de la fila hacia abajo. */
-  .prod-item-top{display:flex;align-items:flex-start;gap:6px;flex-wrap:nowrap}
-  .prod-item-top input[type=checkbox]{flex:none;width:auto;margin-top:8px}
+  /* Cada tarjeta de producto se lee como 3 bloques bien separados: (1) foto+descripción+
+     medida/tela/cantidad juntos, (2) obs+status juntos, (3) Subli/Apli al final. Un fondo
+     y radio propios por bloque (en vez de solo texto suelto) son los que hacen que cada
+     grupo se sienta "un bloque" aunque no haya un borde grueso separándolos. */
+  .prod-block{border-radius:10px;padding:7px 8px}
+  .prod-block-info{display:flex;flex-wrap:wrap;align-items:center;gap:7px;background:rgba(30,33,39,.035)}
+  .prod-block-info input[type=checkbox]{flex:none;width:auto;margin:0}
   /* flex-basis:0 (en vez de "auto") + width:auto (pisando el width:100% genérico de abajo)
      es lo que hace que este textarea SOLO tome el espacio que sobra después de checkbox+
-     foto+botones, en vez de pelear por el ancho completo del contenedor y empujar todo lo
-     demás fuera de la fila (y por ende fuera de la pantalla, recortado). */
-  .prod-item-top .prod-item-producto{flex:1 1 0;width:auto;min-width:0}
-  .prod-item-mid{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+     foto+medida/tela/cant, en vez de pelear por el ancho completo del contenedor y empujar
+     todo lo demás fuera de la fila (y por ende fuera de la pantalla, recortado). */
+  .prod-block-info .prod-item-producto{flex:1 1 130px;width:auto;min-width:0}
+  .prod-block-info .prod-medida,.prod-block-info .prod-tela{flex:0 1 150px;min-width:0}
+  .prod-block-info .prod-cant{flex:none;width:46px;text-align:center}
+  .prod-block-notes{display:flex;flex-direction:column;gap:4px;background:rgba(30,33,39,.02)}
+  .prod-block-flags{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
   .prod-item input,.prod-item textarea.prod-ta{width:100%;border:1px solid transparent;border-radius:7px;padding:5px 6px;
     font-size:12.5px;font-family:inherit;background:transparent}
   .prod-item input:hover,.prod-item textarea.prod-ta:hover{border-color:var(--line)}
   .prod-item input:focus,.prod-item textarea.prod-ta:focus{border-color:var(--gold);background:#fff;outline:none}
-  .prod-item textarea.prod-ta{resize:none;overflow-y:auto;height:36px;line-height:1.35;display:block}
+  .prod-item textarea.prod-ta{resize:none;overflow-y:auto;height:34px;line-height:1.35;display:block}
   .prod-item textarea.prod-item-producto{height:auto;min-height:34px}
-  .prod-item-mid input.prod-medida,.prod-item-mid input.prod-tela{flex:1 1 80px;min-width:0}
-  .prod-item-mid input.prod-cant{flex:none;width:48px;text-align:center}
-  .prod-thumb-cell{width:36px;height:36px;border-radius:8px;overflow:hidden;cursor:pointer;border:1px dashed var(--gold-line);
+  /* +50% de tamaño (antes 36px) — pedido explícito para que la foto se note más. */
+  .prod-thumb-cell{width:54px;height:54px;border-radius:10px;overflow:hidden;cursor:pointer;border:1px dashed var(--gold-line);
     display:flex;align-items:center;justify-content:center;background:#fdfaf3;flex-shrink:0}
   .prod-thumb-cell img{width:100%;height:100%;object-fit:cover;display:block}
-  .prod-thumb-cell span{font-size:16px;color:var(--gold-d)}
+  .prod-thumb-cell span{font-size:22px;color:var(--gold-d)}
   .prod-dif{font-weight:700}
   .prod-dif.late{color:var(--bad)}
   .prod-dif.ok{color:var(--ok)}
@@ -6344,21 +6348,26 @@ function prodItemCardHtml(r, conOt){
   const sel=prodSeleccion.has(r.uid);
   return `<div class="prod-item ${r.entregada?'entregada':''} ${sel?'sel':''}">
     ${conOt? `<div class="prod-item-ot-tag">OT ${esc(r.ot)||'—'} · ${esc(r.cliente)||'(sin cliente)'}</div>` : ''}
-    <div class="prod-item-top">
+    <!-- Bloque 1: foto + descripción + medida/tela/cantidad, todo junto -->
+    <div class="prod-block prod-block-info">
       <input type="checkbox" ${sel?'checked':''} onchange="prodToggleSeleccion('${r.uid}')">
       ${prodThumbHtml(r)}
       <textarea class="prod-ta prod-item-producto" rows="1" oninput="prodInput(this,'${r.uid}','producto')" placeholder="Producto">${esc(r.producto)}</textarea>
-    </div>
-    <div class="prod-item-mid">
       <input class="prod-medida" value="${esc(r.medida)}" oninput="prodInput(this,'${r.uid}','medida')" placeholder="Medida">
       <input class="prod-tela" value="${esc(r.tela)}" oninput="prodInput(this,'${r.uid}','tela')" placeholder="Tela">
       <input class="prod-cant" value="${esc(r.cant)}" oninput="prodInput(this,'${r.uid}','cant')" placeholder="Cant">
+    </div>
+    <!-- Bloque 2: observación + status -->
+    <div class="prod-block prod-block-notes">
+      <textarea class="prod-ta" rows="1" oninput="prodInput(this,'${r.uid}','obs')" placeholder="Obs">${esc(r.obs)}</textarea>
+      <textarea class="prod-ta" rows="1" oninput="prodInput(this,'${r.uid}','etapa')" placeholder="Status">${esc(r.etapa)}</textarea>
+    </div>
+    <!-- Bloque 3: Subli / Apli -->
+    <div class="prod-block prod-block-flags">
       <button class="prod-toggle-mini subli ${r.sublimacion?'on':''}" title="Subli" onclick="prodToggleFlag('${r.uid}','sublimacion')">🎨 Subli${r.sublimacion?' ✓':''}</button>
       <button class="prod-toggle-mini apli ${r.aplicada?'on':''}" title="Apli" onclick="prodToggleFlag('${r.uid}','aplicada')">🧵 Apli${r.aplicada?' ✓':''}</button>
       ${prodAnexoHtml(r)}
     </div>
-    <textarea class="prod-ta" rows="1" oninput="prodInput(this,'${r.uid}','obs')" placeholder="Obs">${esc(r.obs)}</textarea>
-    <textarea class="prod-ta" rows="1" oninput="prodInput(this,'${r.uid}','etapa')" placeholder="Status">${esc(r.etapa)}</textarea>
   </div>`;
 }
 /* Cabecera de un grupo de OT: los datos que se repiten en todas las filas de esa OT
