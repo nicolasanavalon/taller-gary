@@ -317,18 +317,27 @@
   .prod-ot-group{border-radius:14px;overflow:hidden;background:#fff;
     box-shadow:0 3px 14px rgba(120,95,20,.10),inset 0 0 0 1px var(--line)}
   .prod-ot-group.entregada{opacity:.55}
-  /* Franja dorada a la izquierda de la cabecera: marca visualmente dónde empieza cada OT
-     (más "bonito" que un simple fondo plano, y ayuda a separar una tarjeta de la otra). */
-  .prod-ot-head{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:9px 9px 9px 12px;
+  /* Franja de color a la izquierda de la cabecera: marca dónde empieza cada OT. Alterna
+     entre dorado (ot-a) y esmeralda (ot-b) de una tarjeta a la siguiente para que dos OT
+     seguidas no se vean idénticas — con un solo color fijo no se nota dónde termina una y
+     empieza la otra. */
+  .prod-ot-head{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:10px 10px 10px 13px;
     background:linear-gradient(135deg,var(--gold-soft),rgba(202,162,74,.05));
-    border-left:4px solid var(--gold);border-bottom:1px solid var(--gold-line)}
-  .prod-ot-head input,.prod-ot-head textarea{border:1px solid transparent;border-radius:7px;padding:5px 6px;
-    font-size:12.5px;font-family:inherit;background:#fff;box-shadow:inset 0 0 0 1px var(--line)}
+    border-left:5px solid var(--gold);border-bottom:1px solid var(--gold-line)}
+  .prod-ot-head.ot-b{background:linear-gradient(135deg,var(--teal-soft),rgba(14,124,102,.04));
+    border-left-color:var(--teal);border-bottom-color:var(--teal-line)}
+  .prod-ot-head input,.prod-ot-head textarea{border:1px solid transparent;border-radius:7px;padding:6px 7px;
+    font-size:13.5px;font-family:inherit;background:#fff;box-shadow:inset 0 0 0 1px var(--line)}
   .prod-ot-head input:focus,.prod-ot-head textarea:focus{border-color:var(--gold);outline:none;box-shadow:inset 0 0 0 1.5px var(--gold)}
-  .prod-ot-head .prod-ot-ot{width:54px;font-weight:700;flex:none;color:var(--gold-d)}
-  .prod-ot-head .prod-ot-cliente{flex:1 1 140px;min-width:110px;height:34px;resize:none;line-height:1.3;overflow-y:auto;font-weight:600}
+  .prod-ot-head.ot-b input:focus,.prod-ot-head.ot-b textarea:focus{border-color:var(--teal);box-shadow:inset 0 0 0 1.5px var(--teal)}
+  .prod-ot-head .prod-ot-ot{width:60px;font-weight:700;flex:none;color:var(--gold-d)}
+  .prod-ot-head.ot-b .prod-ot-ot{color:var(--teal-d)}
+  /* height:auto + min-height (en vez de una altura fija de 1 línea) es lo que evita que un
+     nombre de cliente largo (ej. "Colegio Alexander Fleming") quede cortado a la mitad. */
+  .prod-ot-head .prod-ot-cliente{flex:1 1 150px;min-width:120px;height:auto;min-height:40px;resize:none;
+    line-height:1.3;overflow-y:auto;font-weight:600}
   .prod-ot-head .prod-ot-comuna{flex:1 1 90px;min-width:80px}
-  .prod-ot-head .prod-ot-fecha{flex:none;width:124px}
+  .prod-ot-head .prod-ot-fecha{flex:none;width:128px}
   .prod-items{display:flex;flex-direction:column}
   .prod-item{padding:9px 10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:7px;transition:background .15s}
   .prod-item:hover{background:rgba(184,134,11,.035)}
@@ -339,15 +348,18 @@
      y radio propios por bloque (en vez de solo texto suelto) son los que hacen que cada
      grupo se sienta "un bloque" aunque no haya un borde grueso separándolos. */
   .prod-block{border-radius:10px;padding:7px 8px}
-  .prod-block-info{display:flex;flex-wrap:wrap;align-items:center;gap:7px;background:rgba(30,33,39,.035)}
-  .prod-block-info input[type=checkbox]{flex:none;width:auto;margin:0}
-  /* flex-basis:0 (en vez de "auto") + width:auto (pisando el width:100% genérico de abajo)
-     es lo que hace que este textarea SOLO tome el espacio que sobra después de checkbox+
-     foto+medida/tela/cant, en vez de pelear por el ancho completo del contenedor y empujar
-     todo lo demás fuera de la fila (y por ende fuera de la pantalla, recortado). */
-  .prod-block-info .prod-item-producto{flex:1 1 130px;width:auto;min-width:0}
-  .prod-block-info .prod-medida,.prod-block-info .prod-tela{flex:0 1 150px;min-width:0}
-  .prod-block-info .prod-cant{flex:none;width:46px;text-align:center}
+  /* align-items:stretch (no "center") es lo que deja que la foto, más abajo, se estire
+     hasta ocupar todo el alto de este bloque — incluido el alto extra que gana cuando la
+     descripción del producto es larga y se va escribiendo hacia abajo. */
+  .prod-block-info{display:flex;align-items:stretch;gap:8px;background:rgba(30,33,39,.035)}
+  .prod-block-info input[type=checkbox]{flex:none;width:auto;align-self:flex-start;margin:3px 0 0}
+  /* Descripción + medida/tela/cantidad van en su propia columna, apiladas: así la medida
+     queda pegada justo debajo de la descripción (no lejos, a la derecha del todo) y, a su
+     vez, tela y cantidad van pegadas a la derecha de la medida dentro de esa misma fila. */
+  .prod-info-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:5px;justify-content:center}
+  .prod-info-specs{display:flex;flex-wrap:wrap;gap:6px}
+  .prod-info-specs .prod-medida,.prod-info-specs .prod-tela{flex:1 1 90px;min-width:0}
+  .prod-info-specs .prod-cant{flex:none;width:50px;text-align:center}
   .prod-block-notes{display:flex;flex-direction:column;gap:4px;background:rgba(30,33,39,.02)}
   .prod-block-flags{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
   .prod-item input,.prod-item textarea.prod-ta{width:100%;border:1px solid transparent;border-radius:7px;padding:5px 6px;
@@ -355,9 +367,11 @@
   .prod-item input:hover,.prod-item textarea.prod-ta:hover{border-color:var(--line)}
   .prod-item input:focus,.prod-item textarea.prod-ta:focus{border-color:var(--gold);background:#fff;outline:none}
   .prod-item textarea.prod-ta{resize:none;overflow-y:auto;height:34px;line-height:1.35;display:block}
-  .prod-item textarea.prod-item-producto{height:auto;min-height:34px}
-  /* +50% de tamaño (antes 36px) — pedido explícito para que la foto se note más. */
-  .prod-thumb-cell{width:54px;height:54px;border-radius:10px;overflow:hidden;cursor:pointer;border:1px dashed var(--gold-line);
+  .prod-item textarea.prod-item-producto{height:auto;min-height:32px}
+  /* Rectángulo (no cuadrado) que se estira al alto disponible del bloque — ver
+     align-items:stretch arriba. El ancho se mantiene angosto a propósito para que se vea
+     como una bandera izada, no como una foto cuadrada de catálogo. */
+  .prod-thumb-cell{width:58px;min-height:64px;border-radius:10px;overflow:hidden;cursor:pointer;border:1px dashed var(--gold-line);
     display:flex;align-items:center;justify-content:center;background:#fdfaf3;flex-shrink:0}
   .prod-thumb-cell img{width:100%;height:100%;object-fit:cover;display:block}
   .prod-thumb-cell span{font-size:22px;color:var(--gold-d)}
@@ -6348,14 +6362,20 @@ function prodItemCardHtml(r, conOt){
   const sel=prodSeleccion.has(r.uid);
   return `<div class="prod-item ${r.entregada?'entregada':''} ${sel?'sel':''}">
     ${conOt? `<div class="prod-item-ot-tag">OT ${esc(r.ot)||'—'} · ${esc(r.cliente)||'(sin cliente)'}</div>` : ''}
-    <!-- Bloque 1: foto + descripción + medida/tela/cantidad, todo junto -->
+    <!-- Bloque 1: foto (rectángulo que se estira al alto del bloque) + descripción (crece
+         hacia abajo si es larga) + medida/tela/cantidad pegados justo debajo de la
+         descripción, todo dentro del mismo fondo para que se lea como un solo bloque. -->
     <div class="prod-block prod-block-info">
       <input type="checkbox" ${sel?'checked':''} onchange="prodToggleSeleccion('${r.uid}')">
       ${prodThumbHtml(r)}
-      <textarea class="prod-ta prod-item-producto" rows="1" oninput="prodInput(this,'${r.uid}','producto')" placeholder="Producto">${esc(r.producto)}</textarea>
-      <input class="prod-medida" value="${esc(r.medida)}" oninput="prodInput(this,'${r.uid}','medida')" placeholder="Medida">
-      <input class="prod-tela" value="${esc(r.tela)}" oninput="prodInput(this,'${r.uid}','tela')" placeholder="Tela">
-      <input class="prod-cant" value="${esc(r.cant)}" oninput="prodInput(this,'${r.uid}','cant')" placeholder="Cant">
+      <div class="prod-info-main">
+        <textarea class="prod-ta prod-item-producto" rows="1" oninput="prodInput(this,'${r.uid}','producto')" placeholder="Producto">${esc(r.producto)}</textarea>
+        <div class="prod-info-specs">
+          <input class="prod-medida" value="${esc(r.medida)}" oninput="prodInput(this,'${r.uid}','medida')" placeholder="Medida">
+          <input class="prod-tela" value="${esc(r.tela)}" oninput="prodInput(this,'${r.uid}','tela')" placeholder="Tela">
+          <input class="prod-cant" value="${esc(r.cant)}" oninput="prodInput(this,'${r.uid}','cant')" placeholder="Cant">
+        </div>
+      </div>
     </div>
     <!-- Bloque 2: observación + status -->
     <div class="prod-block prod-block-notes">
@@ -6374,10 +6394,10 @@ function prodItemCardHtml(r, conOt){
    (ID, cliente, comuna, fecha de compromiso) se muestran y editan una sola vez acá.
    "uids" queda guardado en data-uids del contenedor para que prodInputGrupo/
    prodInputFechaGrupo sepan a qué filas aplicar el cambio. */
-function prodOtHeaderHtml(uids, r0){
+function prodOtHeaderHtml(r0, colorClase){
   const d=diasDif(r0.fCom);
   const difHtml = d==null? '<span class="muted">—</span>' : `<span class="prod-dif ${d<0?'late':'ok'}">${d}</span>`;
-  return `<div class="prod-ot-head">
+  return `<div class="prod-ot-head ${colorClase}">
     <input class="prod-ot-ot" value="${esc(r0.ot)}" oninput="prodInputGrupo(this,'ot')" placeholder="OT">
     <textarea class="prod-ot-cliente" rows="1" oninput="prodInputGrupo(this,'cliente')" placeholder="Cliente">${esc(r0.cliente)}</textarea>
     <input class="prod-ot-comuna" value="${esc(r0.comuna)}" oninput="prodInputGrupo(this,'comuna')" placeholder="Comuna">
@@ -6385,11 +6405,14 @@ function prodOtHeaderHtml(uids, r0){
     <span class="prod-dif-wrap">${difHtml}</span>
   </div>`;
 }
-function prodOtGrupoHtml(rowsGrupo){
+/* "colorClase" alterna entre 2 colores (ot-a / ot-b) de una tarjeta de OT a la siguiente,
+   para que se note de un vistazo dónde termina una orden de trabajo y empieza la próxima —
+   con un solo color fijo, dos OT seguidas se ven todas iguales. */
+function prodOtGrupoHtml(rowsGrupo, colorClase){
   const uids=rowsGrupo.map(r=>r.uid);
   const todaEntregada=rowsGrupo.every(r=>r.entregada);
-  return `<div class="prod-ot-group ${todaEntregada?'entregada':''}" data-uids="${uids.join(',')}">
-    ${prodOtHeaderHtml(uids, rowsGrupo[0])}
+  return `<div class="prod-ot-group ${colorClase} ${todaEntregada?'entregada':''}" data-uids="${uids.join(',')}">
+    ${prodOtHeaderHtml(rowsGrupo[0], colorClase)}
     <div class="prod-items">${rowsGrupo.map(r=>prodItemCardHtml(r, false)).join('')}</div>
   </div>`;
 }
@@ -6398,12 +6421,12 @@ function prodOtGrupoHtml(rowsGrupo){
    se van agrupando tramos consecutivos con el mismo "ot" en una sola tarjeta. */
 function prodFilasHtml(rows){
   if(prodSoloChile) return prodFilasHtmlPorMedida(rows);
-  let html='', grupo=[];
+  let html='', grupo=[], n=0;
   rows.forEach((r,i)=>{
-    if(grupo.length && rows[i-1].ot!==r.ot){ html+=prodOtGrupoHtml(grupo); grupo=[]; }
+    if(grupo.length && rows[i-1].ot!==r.ot){ html+=prodOtGrupoHtml(grupo, n++%2? 'ot-b':'ot-a'); grupo=[]; }
     grupo.push(r);
   });
-  if(grupo.length) html+=prodOtGrupoHtml(grupo);
+  if(grupo.length) html+=prodOtGrupoHtml(grupo, n++%2? 'ot-b':'ot-a');
   return html;
 }
 /* Se intercala un subtotal cada vez que cambia el grupo (medida+tela), y un total general
