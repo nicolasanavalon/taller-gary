@@ -313,36 +313,53 @@
   .prod-table-wrap{position:sticky;top:var(--sticky-off,110px);overflow-y:auto;overflow-x:hidden;
     max-height:calc(100vh - var(--sticky-off,110px) - 40px);border-radius:16px;
     box-shadow:inset 0 0 0 1px var(--line);background:#fbf9f4}
-  .prod-list{display:flex;flex-direction:column;gap:12px;padding:10px}
-  .prod-ot-group{border-radius:14px;overflow:hidden;background:#fff;
+  .prod-list{display:flex;flex-direction:column;gap:14px;padding:10px}
+  /* Cada tarjeta de OT (cabecera + sus productos) lleva un color propio de fondo —
+     dorado (ot-a) o esmeralda (ot-b), alternando de una OT a la siguiente — para que se
+     note de un vistazo que los productos de abajo pertenecen a la OT de arriba, y dónde
+     termina una orden de trabajo y empieza la próxima. Queda como variables CSS para que
+     tanto la cabecera como cada tarjeta de producto usen el mismo color sin repetirlo. */
+  .prod-ot-group{border-radius:14px;overflow:hidden;
     box-shadow:0 3px 14px rgba(120,95,20,.10),inset 0 0 0 1px var(--line)}
+  .prod-ot-group.ot-a{--ot-wash:rgba(184,134,11,.055); --ot-card:rgba(184,134,11,.11);
+    --ot-shadow:rgba(120,95,20,.16); --ot-ring:var(--gold)}
+  .prod-ot-group.ot-b{--ot-wash:rgba(14,124,102,.06); --ot-card:rgba(14,124,102,.12);
+    --ot-shadow:rgba(10,92,76,.18); --ot-ring:var(--teal)}
+  .prod-ot-group{background:var(--ot-wash)}
   .prod-ot-group.entregada{opacity:.55}
-  /* Franja de color a la izquierda de la cabecera: marca dónde empieza cada OT. Alterna
-     entre dorado (ot-a) y esmeralda (ot-b) de una tarjeta a la siguiente para que dos OT
-     seguidas no se vean idénticas — con un solo color fijo no se nota dónde termina una y
-     empieza la otra. */
   .prod-ot-head{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:10px 10px 10px 13px;
     background:linear-gradient(135deg,var(--gold-soft),rgba(202,162,74,.05));
     border-left:5px solid var(--gold);border-bottom:1px solid var(--gold-line)}
   .prod-ot-head.ot-b{background:linear-gradient(135deg,var(--teal-soft),rgba(14,124,102,.04));
     border-left-color:var(--teal);border-bottom-color:var(--teal-line)}
-  .prod-ot-head input,.prod-ot-head textarea{border:1px solid transparent;border-radius:7px;padding:6px 7px;
+  .prod-ot-head input{border:1px solid transparent;border-radius:7px;padding:6px 7px;
     font-size:13.5px;font-family:inherit;background:#fff;box-shadow:inset 0 0 0 1px var(--line)}
-  .prod-ot-head input:focus,.prod-ot-head textarea:focus{border-color:var(--gold);outline:none;box-shadow:inset 0 0 0 1.5px var(--gold)}
-  .prod-ot-head.ot-b input:focus,.prod-ot-head.ot-b textarea:focus{border-color:var(--teal);box-shadow:inset 0 0 0 1.5px var(--teal)}
+  .prod-ot-head input:focus{border-color:var(--gold);outline:none;box-shadow:inset 0 0 0 1.5px var(--gold)}
+  .prod-ot-head.ot-b input:focus{border-color:var(--teal);box-shadow:inset 0 0 0 1.5px var(--teal)}
   .prod-ot-head .prod-ot-ot{width:60px;font-weight:700;flex:none;color:var(--gold-d)}
   .prod-ot-head.ot-b .prod-ot-ot{color:var(--teal-d)}
-  /* height:auto + min-height (en vez de una altura fija de 1 línea) es lo que evita que un
-     nombre de cliente largo (ej. "Colegio Alexander Fleming") quede cortado a la mitad. */
-  .prod-ot-head .prod-ot-cliente{flex:1 1 150px;min-width:120px;height:auto;min-height:40px;resize:none;
-    line-height:1.3;overflow-y:auto;font-weight:600}
+  /* El cliente va como texto suelto, sin caja/borde de "campo de formulario" (solo se nota
+     que es editable al tocarlo) — así se lee como el título de la tarjeta, no como un input
+     más. height:auto + min-height (en vez de una altura fija de 1 línea) es lo que evita
+     que un nombre largo (ej. "Colegio Alexander Fleming") quede cortado a la mitad. */
+  .prod-ot-head .prod-ot-cliente{flex:1 1 150px;min-width:120px;height:auto;min-height:38px;resize:none;
+    line-height:1.3;overflow-y:auto;font-weight:700;font-size:15px;
+    background:transparent;border:none;box-shadow:none;padding:6px 4px}
+  .prod-ot-head .prod-ot-cliente:hover{box-shadow:inset 0 0 0 1px var(--line)}
+  .prod-ot-head .prod-ot-cliente:focus{box-shadow:inset 0 0 0 1px var(--gold);background:#fff}
+  .prod-ot-head.ot-b .prod-ot-cliente:focus{box-shadow:inset 0 0 0 1px var(--teal)}
   .prod-ot-head .prod-ot-comuna{flex:1 1 90px;min-width:80px}
   .prod-ot-head .prod-ot-fecha{flex:none;width:128px}
-  .prod-items{display:flex;flex-direction:column}
-  .prod-item{padding:9px 10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:7px;transition:background .15s}
-  .prod-item:hover{background:rgba(184,134,11,.035)}
+  .prod-items{display:flex;flex-direction:column;gap:8px;padding:8px}
+  /* Cada producto es una tarjeta propia, con un tinte del mismo color de su OT (más fuerte
+     que el fondo general de la tarjeta) — el color "sigue" detrás de cada producto, no solo
+     en el título de arriba. */
+  .prod-item{background:var(--ot-card,#fff);border-radius:10px;padding:9px 10px;
+    display:flex;flex-direction:column;gap:7px;box-shadow:0 1px 3px var(--ot-shadow,rgba(0,0,0,.08));
+    transition:box-shadow .15s}
+  .prod-item:hover{box-shadow:0 3px 9px var(--ot-shadow,rgba(0,0,0,.16))}
   .prod-item.entregada{opacity:.5}
-  .prod-item.sel{background:var(--teal-soft)}
+  .prod-item.sel{box-shadow:0 0 0 2px var(--ot-ring,var(--teal))}
   /* Cada tarjeta de producto se lee como 2 bloques: (1) foto+descripción+medida/tela/
      cantidad+Subli/Apli/Anexo (estos 3 últimos arriba a la derecha, aprovechando el
      espacio que quedaba vacío junto a la descripción), y (2) obs+status, más apretado.
@@ -352,7 +369,7 @@
   /* align-items:stretch (no "center") es lo que deja que la foto, más abajo, se estire
      hasta ocupar todo el alto de este bloque — incluido el alto extra que gana cuando la
      descripción del producto es larga y se va escribiendo hacia abajo. */
-  .prod-block-info{display:flex;align-items:stretch;gap:8px;background:rgba(30,33,39,.035)}
+  .prod-block-info{display:flex;align-items:stretch;gap:8px;background:rgba(255,255,255,.72)}
   .prod-block-info input[type=checkbox]{flex:none;width:auto;align-self:flex-start;margin:3px 0 0}
   /* Descripción + medida/tela/cantidad van en su propia columna, apiladas: así la medida
      queda pegada justo debajo de la descripción (no lejos, a la derecha del todo) y, a su
@@ -370,7 +387,7 @@
   .prod-info-specs .prod-cant{flex:none;width:50px;text-align:center}
   /* Bloque de obs/status más apretado: menos padding, menos separación entre ambos campos
      y cajas más bajas (ver textarea.prod-ta.compact más abajo). */
-  .prod-block-notes{display:flex;flex-direction:column;gap:3px;padding:5px 8px;background:rgba(30,33,39,.02)}
+  .prod-block-notes{display:flex;flex-direction:column;gap:3px;padding:5px 8px;background:rgba(255,255,255,.45)}
   .prod-item input,.prod-item textarea.prod-ta{width:100%;border:1px solid transparent;border-radius:7px;padding:5px 6px;
     font-size:12.5px;font-family:inherit;background:transparent}
   .prod-item input:hover,.prod-item textarea.prod-ta:hover{border-color:var(--line)}
