@@ -9,6 +9,9 @@
     --glass:rgba(255,255,255,.55); --glass-strong:rgba(255,255,255,.78);
     --line:rgba(40,45,60,.10);
     --ok:#1f9d63; --bad:#d4483d;
+    /* Acento esmeralda — solo lo usa la vista de tarjetas de Producción en celular
+       (ver @media max-width:760px más abajo), para alternar el color de cada OT. */
+    --teal:#0e7c66; --teal-d:#0a5c4c; --teal-soft:rgba(14,124,102,.13); --teal-line:rgba(14,124,102,.32);
   }
   *{box-sizing:border-box}
   html,body{margin:0;color:var(--ink);
@@ -60,6 +63,11 @@
 
   main{padding:24px 24px;max-width:1440px;margin:0 auto}
   main.prod-main{max-width:none;width:100%;box-sizing:border-box;padding-left:28px;padding-right:28px}
+  /* En Producción, la píldora de sincronización queda visible en el header — en celulares
+     angostos eso ya no cabe junto al logo y el reloj en una sola fila, así que se permite
+     que el header pase a 2 líneas en vez de desbordar hacia los costados (scroll
+     horizontal). Solo tiene efecto donde ya aparece esa píldora (Producción/Sublimación). */
+  @media(max-width:480px){ header{flex-wrap:wrap;row-gap:6px} }
 
   /* ---------- GLASS BASE ---------- */
   .glass{background:var(--glass);-webkit-backdrop-filter:blur(16px) saturate(1.3);backdrop-filter:blur(16px) saturate(1.3);
@@ -338,6 +346,122 @@
   .prod-table tr.grupo-sep td{border-top:3px solid var(--gold-d)}
   .prod-table tr.prod-subtotal td{background:var(--gold-soft);padding:6px 8px;font-size:12.5px}
   .prod-table tr.prod-subtotal.total td{background:var(--gold-d);color:#fff;font-size:13.5px}
+  /* ---------- Vista de tarjetas de Producción (solo celular) ----------
+     Por debajo de 760px, en vez de la tabla de arriba (que obliga a scroll horizontal en
+     un teléfono), Producción se pinta como una lista vertical de tarjetas agrupadas por OT
+     — ver prodEsMobile()/renderProduccion() en el JS. Todo va adentro del media query para
+     no afectar en nada la tabla de escritorio de arriba (algunas clases, como
+     .prod-thumb-cell o .prod-toggle-mini, se reusan pero solo toman este estilo bajo
+     760px). */
+  @media(max-width:760px){
+    .prod-list{display:flex;flex-direction:column;gap:14px;padding:10px}
+    /* Cada tarjeta de OT (cabecera + sus productos) lleva un color propio de fondo —
+       dorado (ot-a) o esmeralda (ot-b), alternando de una OT a la siguiente — para que se
+       note de un vistazo que los productos de abajo pertenecen a la OT de arriba, y dónde
+       termina una orden de trabajo y empieza la próxima. Queda como variables CSS para que
+       tanto la cabecera como cada tarjeta de producto usen el mismo color sin repetirlo. */
+    .prod-ot-group{border-radius:14px;overflow:hidden;
+      box-shadow:0 3px 14px rgba(120,95,20,.10),inset 0 0 0 1px var(--line)}
+    .prod-ot-group.ot-a{--ot-wash:rgba(184,134,11,.055); --ot-card:rgba(184,134,11,.11);
+      --ot-shadow:rgba(120,95,20,.16); --ot-ring:var(--gold)}
+    .prod-ot-group.ot-b{--ot-wash:rgba(14,124,102,.06); --ot-card:rgba(14,124,102,.12);
+      --ot-shadow:rgba(10,92,76,.18); --ot-ring:var(--teal)}
+    .prod-ot-group{background:var(--ot-wash)}
+    .prod-ot-group.entregada{opacity:.55}
+    .prod-ot-head{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:10px 10px 10px 13px;
+      background:linear-gradient(135deg,var(--gold-soft),rgba(202,162,74,.05));
+      border-left:5px solid var(--gold);border-bottom:1px solid var(--gold-line)}
+    .prod-ot-head.ot-b{background:linear-gradient(135deg,var(--teal-soft),rgba(14,124,102,.04));
+      border-left-color:var(--teal);border-bottom-color:var(--teal-line)}
+    .prod-ot-head input{border:1px solid transparent;border-radius:7px;padding:6px 7px;
+      font-size:13.5px;font-family:inherit;background:#fff;box-shadow:inset 0 0 0 1px var(--line)}
+    .prod-ot-head input:focus{border-color:var(--gold);outline:none;box-shadow:inset 0 0 0 1.5px var(--gold)}
+    .prod-ot-head.ot-b input:focus{border-color:var(--teal);box-shadow:inset 0 0 0 1.5px var(--teal)}
+    .prod-ot-head .prod-ot-ot{width:60px;font-weight:700;flex:none;color:var(--gold-d)}
+    .prod-ot-head.ot-b .prod-ot-ot{color:var(--teal-d)}
+    /* El cliente va como texto suelto, sin caja/borde de "campo de formulario" (solo se
+       nota que es editable al tocarlo) — así se lee como el título de la tarjeta, no como
+       un input más. height:auto + min-height (en vez de una altura fija de 1 línea) es lo
+       que evita que un nombre largo (ej. "Colegio Alexander Fleming") quede cortado. */
+    .prod-ot-head .prod-ot-cliente{flex:1 1 150px;min-width:120px;height:auto;min-height:54px;resize:none;
+      line-height:1.3;overflow-y:auto;font-weight:700;font-size:15px;
+      background:transparent;border:none;box-shadow:none;padding:6px 4px}
+    .prod-ot-head .prod-ot-cliente:hover{box-shadow:inset 0 0 0 1px var(--line)}
+    .prod-ot-head .prod-ot-cliente:focus{box-shadow:inset 0 0 0 1px var(--gold);background:#fff}
+    .prod-ot-head.ot-b .prod-ot-cliente:focus{box-shadow:inset 0 0 0 1px var(--teal)}
+    .prod-ot-head .prod-ot-comuna{flex:1 1 90px;min-width:80px}
+    .prod-ot-head .prod-ot-fecha{flex:none;width:128px}
+    .prod-items{display:flex;flex-direction:column;gap:8px;padding:8px}
+    /* Cada producto es una tarjeta propia, con un tinte del mismo color de su OT (más
+       fuerte que el fondo general de la tarjeta) — el color "sigue" detrás de cada
+       producto, no solo en el título de arriba. */
+    .prod-item{background:var(--ot-card,#fff);border-radius:10px;padding:9px 10px;
+      display:flex;flex-direction:column;gap:7px;box-shadow:0 1px 3px var(--ot-shadow,rgba(0,0,0,.08));
+      transition:box-shadow .15s}
+    .prod-item:hover{box-shadow:0 3px 9px var(--ot-shadow,rgba(0,0,0,.16))}
+    .prod-item.entregada{opacity:.5}
+    .prod-item.sel{box-shadow:0 0 0 2px var(--ot-ring,var(--teal))}
+    /* Cada tarjeta de producto se lee como 2 bloques: (1) foto+descripción+medida/tela/
+       cantidad+Subli/Apli/Anexo (estos 3 últimos arriba a la derecha, aprovechando el
+       espacio que quedaba vacío junto a la descripción), y (2) obs+status, más apretado. */
+    .prod-block{border-radius:10px;padding:7px 8px}
+    /* align-items:stretch (no "center") es lo que deja que la foto, más abajo, se estire
+       hasta ocupar todo el alto de este bloque — incluido el alto extra que gana cuando la
+       descripción del producto es larga y se va escribiendo hacia abajo. */
+    .prod-block-info{display:flex;align-items:stretch;gap:8px;background:rgba(255,255,255,.72)}
+    .prod-block-info input[type=checkbox]{flex:none;width:auto;align-self:flex-start;margin:3px 0 0}
+    /* Descripción + medida/tela/cantidad van en su propia columna, apiladas: así la medida
+       queda pegada justo debajo de la descripción (no lejos, a la derecha del todo) y, a
+       su vez, tela y cantidad van pegadas a la derecha de la medida en esa misma fila. */
+    .prod-info-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:5px;justify-content:center}
+    .prod-info-top{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap}
+    /* flex-basis:0 (en vez de "auto") + width:auto es lo que deja que la descripción se
+       achique si hace falta, en vez de empujar los botones fuera del bloque (arriba a la
+       derecha es donde queda el espacio que se aprovecha para Subli/Apli/Anexo). */
+    .prod-info-top .prod-item-producto{flex:1 1 140px;width:auto;min-width:90px}
+    .prod-info-actions{display:flex;gap:4px;flex-shrink:0;align-items:center}
+    .prod-info-actions .prod-toggle-mini{padding:5px 8px;font-size:10.5px}
+    .prod-info-specs{display:flex;flex-wrap:wrap;gap:6px}
+    .prod-info-specs .prod-medida,.prod-info-specs .prod-tela{flex:1 1 90px;min-width:0}
+    .prod-info-specs .prod-cant{flex:none;width:50px;text-align:center}
+    /* Bloque de obs/status más apretado: menos padding, menos separación entre ambos
+       campos y cajas de menor altura (ver textarea.prod-ta.compact más abajo). */
+    .prod-block-notes{display:flex;flex-direction:column;gap:3px;padding:5px 8px;background:rgba(255,255,255,.45)}
+    .prod-item input,.prod-item textarea.prod-ta{width:100%;border:1px solid transparent;border-radius:7px;padding:5px 6px;
+      font-size:12.5px;font-family:inherit;background:transparent}
+    .prod-item input:hover,.prod-item textarea.prod-ta:hover{border-color:var(--line)}
+    .prod-item input:focus,.prod-item textarea.prod-ta:focus{border-color:var(--gold);background:#fff;outline:none}
+    .prod-item textarea.prod-ta{resize:none;overflow-y:auto;height:34px;line-height:1.35;display:block}
+    .prod-item textarea.prod-ta.compact{height:24px;padding:3px 6px}
+    .prod-item textarea.prod-item-producto{height:auto;min-height:32px}
+    /* Tamaño fijo e igual para todas las fotos (una foto muy vertical, como la de un
+       asta, no debe quedar más grande que las demás). object-fit:cover recorta cada foto
+       para que quepa igual en este mismo recuadro, sea cual sea su forma original. */
+    .prod-thumb-cell{width:64px;height:64px;align-self:flex-start;border-radius:10px;overflow:hidden;
+      cursor:pointer;border:1px dashed var(--gold-line);display:flex;align-items:center;
+      justify-content:center;background:#fdfaf3;flex-shrink:0}
+    .prod-thumb-cell span{font-size:22px;color:var(--gold-d)}
+    /* Subli/Apli marcados deben "saltar a la vista" apenas se miran — por eso llevan color
+       sólido (no el mismo dorado tenue del resto de la tarjeta) y una sombra propia, y cada
+       uno con un color distinto entre sí para distinguirlos de un vistazo. */
+    .prod-toggle-mini{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 11px;
+      font-size:11.5px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap;transition:.15s}
+    .prod-toggle-mini:hover{border-color:var(--gold-line)}
+    .prod-toggle-mini.subli.on{background:var(--teal);border-color:var(--teal-d);color:#fff;
+      box-shadow:0 3px 10px rgba(14,124,102,.35)}
+    .prod-toggle-mini.apli.on{background:#6d4aa8;border-color:#4f3179;color:#fff;
+      box-shadow:0 3px 10px rgba(109,74,168,.35)}
+    .prod-mini{width:28px;height:28px}
+    .prod-subtotal-card{background:var(--gold-soft);border-radius:12px;padding:10px 13px;font-size:12.5px;
+      display:flex;justify-content:space-between;gap:10px;font-weight:700;box-shadow:inset 0 0 0 1px var(--gold-line)}
+    .prod-subtotal-card.total{background:linear-gradient(135deg,var(--gold-d),var(--gold));color:#fff;font-size:13.5px;box-shadow:0 3px 12px rgba(138,106,16,.35)}
+    .prod-item-ot-tag{font-size:11px;font-weight:700;color:var(--gold-d);white-space:nowrap;
+      background:var(--gold-soft);display:inline-block;padding:3px 8px;border-radius:6px;margin-bottom:2px}
+    /* Menos margen a los costados: en celular ya no hay scroll horizontal que evitar, así
+       que ese espacio a los costados es puro ancho perdido para las tarjetas. */
+    main.prod-main{padding-left:8px;padding-right:8px}
+    .prod-head,.prod-stats,.prod-toolbar,.prod-bulkbar{margin-left:4px;margin-right:4px}
+  }
   /* ---------- Vista para imprimir (Producción) ---------- */
   #prodPrintArea{display:none}
   #prodPrintArea h1{font-family:Georgia,serif;font-size:18px;color:var(--gold-d);margin:0 0 4px}
@@ -6418,6 +6542,119 @@ function prodFilasHtmlPorMedida(rows){
   return html;
 }
 
+/* ---------- Vista de tarjetas (celular) ----------
+   En pantallas angostas, Producción se ve como una lista vertical de tarjetas agrupadas
+   por OT en vez de la tabla de arriba (que en celular obligaría a scroll horizontal).
+   Son dos "pintados" del mismo PRODUCCION.rows — ver prodEsMobile()/renderProduccion() más
+   abajo, que elige cuál usar según el ancho de pantalla. Todo lo que se edite en cualquiera
+   de las dos vistas se guarda en las mismas filas y se sincroniza igual a la nube. */
+function prodEmptyRowHtmlTarjetas(){
+  return `<div class="prod-empty">Sin filas para mostrar. Usa "+ Nueva fila" o "📥 Importar filas".</div>`;
+}
+/* Tarjeta de un producto (una fila de PRODUCCION.rows). "conOt" agrega una etiqueta
+   con la OT/cliente arriba, para cuando la tarjeta se muestra fuera de un grupo por OT
+   (ej. la vista "solo banderas de Chile", que agrupa por medida en vez de por OT). */
+function prodItemCardHtml(r, conOt){
+  const sel=prodSeleccion.has(r.uid);
+  return `<div class="prod-item ${r.entregada?'entregada':''} ${sel?'sel':''}">
+    ${conOt? `<div class="prod-item-ot-tag">OT ${esc(r.ot)||'—'} · ${esc(r.cliente)||'(sin cliente)'}</div>` : ''}
+    <!-- Bloque 1: foto (tamaño fijo) + descripción (crece hacia abajo si es larga) +
+         medida/tela/cantidad pegados justo debajo de la descripción, todo dentro del mismo
+         fondo para que se lea como un solo bloque. Subli/Apli/Anexo van arriba a la
+         derecha, aprovechando el espacio que quedaba vacío junto a la descripción en vez
+         de tener su propio bloque aparte. -->
+    <div class="prod-block prod-block-info">
+      <input type="checkbox" ${sel?'checked':''} onchange="prodToggleSeleccion('${r.uid}')">
+      ${prodThumbHtml(r)}
+      <div class="prod-info-main">
+        <div class="prod-info-top">
+          <textarea class="prod-ta prod-item-producto" rows="1" oninput="prodInput(this,'${r.uid}','producto')" placeholder="Producto">${esc(r.producto)}</textarea>
+          <div class="prod-info-actions">
+            <button class="prod-toggle-mini subli ${r.sublimacion?'on':''}" title="Subli" onclick="prodToggleFlag('${r.uid}','sublimacion')">🎨 Subli${r.sublimacion?' ✓':''}</button>
+            <button class="prod-toggle-mini apli ${r.aplicada?'on':''}" title="Apli" onclick="prodToggleFlag('${r.uid}','aplicada')">🧵 Apli${r.aplicada?' ✓':''}</button>
+            ${prodAnexoHtml(r)}
+          </div>
+        </div>
+        <div class="prod-info-specs">
+          <input class="prod-medida" value="${esc(r.medida)}" oninput="prodInput(this,'${r.uid}','medida')" placeholder="Medida">
+          <input class="prod-tela" value="${esc(r.tela)}" oninput="prodInput(this,'${r.uid}','tela')" placeholder="Tela">
+          <input class="prod-cant" value="${esc(r.cant)}" oninput="prodInput(this,'${r.uid}','cant')" placeholder="Cant">
+        </div>
+      </div>
+    </div>
+    <!-- Bloque 2: observación + status, más apretado -->
+    <div class="prod-block prod-block-notes">
+      <textarea class="prod-ta compact" rows="1" oninput="prodInput(this,'${r.uid}','obs')" placeholder="Obs">${esc(r.obs)}</textarea>
+      <textarea class="prod-ta compact" rows="1" oninput="prodInput(this,'${r.uid}','etapa')" placeholder="Status">${esc(r.etapa)}</textarea>
+    </div>
+  </div>`;
+}
+/* Cabecera de un grupo de OT: los datos que se repiten en todas las filas de esa OT
+   (ID, cliente, comuna, fecha de compromiso) se muestran y editan una sola vez acá.
+   "uids" queda guardado en data-uids del contenedor para que prodInputGrupo/
+   prodInputFechaGrupo sepan a qué filas aplicar el cambio. */
+function prodOtHeaderHtml(r0, colorClase){
+  const d=diasDif(r0.fCom);
+  const difHtml = d==null? '<span class="muted">—</span>' : `<span class="prod-dif ${d<0?'late':'ok'}">${d}</span>`;
+  return `<div class="prod-ot-head ${colorClase}">
+    <input class="prod-ot-ot" value="${esc(r0.ot)}" oninput="prodInputGrupo(this,'ot')" placeholder="OT">
+    <textarea class="prod-ot-cliente" rows="1" oninput="prodInputGrupo(this,'cliente')" placeholder="Cliente">${esc(r0.cliente)}</textarea>
+    <input class="prod-ot-comuna" value="${esc(r0.comuna)}" oninput="prodInputGrupo(this,'comuna')" placeholder="Comuna">
+    <input class="prod-ot-fecha" type="date" value="${esc(r0.fCom)}" oninput="prodInputFechaGrupo(this)">
+    <span class="prod-dif-wrap">${difHtml}</span>
+  </div>`;
+}
+/* "colorClase" alterna entre 2 colores (ot-a / ot-b) de una tarjeta de OT a la siguiente,
+   para que se note de un vistazo dónde termina una orden de trabajo y empieza la próxima —
+   con un solo color fijo, dos OT seguidas se ven todas iguales. */
+function prodOtGrupoHtml(rowsGrupo, colorClase){
+  const uids=rowsGrupo.map(r=>r.uid);
+  const todaEntregada=rowsGrupo.every(r=>r.entregada);
+  return `<div class="prod-ot-group ${colorClase} ${todaEntregada?'entregada':''}" data-uids="${uids.join(',')}">
+    ${prodOtHeaderHtml(rowsGrupo[0], colorClase)}
+    <div class="prod-items">${rowsGrupo.map(r=>prodItemCardHtml(r, false)).join('')}</div>
+  </div>`;
+}
+/* Las filas de prodRowsVista() ya quedan ordenadas por fecha de compromiso, así que las
+   de una misma OT caen adyacentes de forma natural (todas comparten esa fecha) — acá solo
+   se van agrupando tramos consecutivos con el mismo "ot" en una sola tarjeta. */
+function prodFilasHtmlTarjetas(rows){
+  if(prodSoloChile) return prodFilasHtmlPorMedidaTarjetas(rows);
+  let html='', grupo=[], n=0;
+  rows.forEach((r,i)=>{
+    if(grupo.length && rows[i-1].ot!==r.ot){ html+=prodOtGrupoHtml(grupo, n++%2? 'ot-b':'ot-a'); grupo=[]; }
+    grupo.push(r);
+  });
+  if(grupo.length) html+=prodOtGrupoHtml(grupo, n++%2? 'ot-b':'ot-a');
+  return html;
+}
+/* Se intercala un subtotal cada vez que cambia el grupo (medida+tela), y un total general
+   al final. Van separadas por tela porque, aunque midan lo mismo, un pedido en Bistrech y
+   otro en Raso no son lo mismo a producir. Acá no hay tarjeta de OT (se agrupa por medida,
+   no por OT), así que cada tarjeta de producto lleva su propia etiqueta de OT/cliente. */
+function prodFilaSubtotalHtmlTarjeta(medida, tela, subtotal, esTotal){
+  const label = esTotal? 'TOTAL banderas de Chile' : 'Subtotal '+esc(medida||'(sin medida)')+(tela?' · '+esc(tela):'');
+  return `<div class="prod-subtotal-card${esTotal?' total':''}"><span>${label}</span><span>${subtotal}</span></div>`;
+}
+function prodFilasHtmlPorMedidaTarjetas(rows){
+  let html='', grupoActual=null, subtotal=0, granTotal=0;
+  rows.forEach(r=>{
+    const medida=(r.medida||'').trim(), tela=(r.tela||'').trim();
+    const grupo=claveAgrupacion(medida)+'‖'+claveAgrupacion(tela);
+    if(grupoActual!==null && grupo!==grupoActual.grupo){
+      html+=prodFilaSubtotalHtmlTarjeta(grupoActual.medida, grupoActual.tela, subtotal, false);
+      subtotal=0;
+    }
+    grupoActual={grupo, medida, tela};
+    const cant=+r.cant||0;
+    subtotal+=cant; granTotal+=cant;
+    html+=prodItemCardHtml(r, true);
+  });
+  if(grupoActual!==null) html+=prodFilaSubtotalHtmlTarjeta(grupoActual.medida, grupoActual.tela, subtotal, false);
+  if(rows.length) html+=prodFilaSubtotalHtmlTarjeta('', '', granTotal, true);
+  return html;
+}
+
 /* ---------- Vista para imprimir ----------
    Tabla estática (sin inputs ni botones) con las mismas filas que se ven en pantalla
    (respeta la pestaña, el filtro 🇨🇱, la búsqueda, etc.), pensada para caber horizontal
@@ -6493,6 +6730,7 @@ function prodAbrirVistaImpresion(){
 }
 function renderProduccion(m){
   const rows=prodRowsVista();
+  prodUltimoEsMobile=prodEsMobile();
   return `
     ${prodCompacto? '' : `
     <div class="backlink" onclick="go('inicio')">← Volver al inicio</div>
@@ -6541,6 +6779,11 @@ function renderProduccion(m){
       <button class="btn ghost sm" onclick="prodLimpiarSeleccion()">Cancelar</button>
     </div>`:''}
 
+    ${prodEsMobile()? `
+    <div class="prod-table-wrap">
+      <div class="prod-list">${rows.length? prodFilasHtmlTarjetas(rows) : prodEmptyRowHtmlTarjetas()}</div>
+    </div>
+    ` : `
     <div class="prod-table-wrap">
       <table class="prod-table">
         <thead><tr>
@@ -6551,6 +6794,7 @@ function renderProduccion(m){
         <tbody>${rows.length? prodFilasHtml(rows) : prodEmptyRowHtml()}</tbody>
       </table>
     </div>
+    `}
     <div class="row" style="margin-top:12px"><button class="btn ghost sm" onclick="prodNuevaFila()">+ Agregar fila</button></div>
   `;
 }
@@ -7097,7 +7341,18 @@ function prodAjustarStickyOffset(){
   const off=(h?h.offsetHeight:0)+(n?n.offsetHeight:0);
   document.documentElement.style.setProperty('--sticky-off', off+'px');
 }
-window.addEventListener('resize', ()=>{ if(current==='produccion') prodAjustarStickyOffset(); });
+/* Debajo de este ancho, Producción se pinta como tarjetas en vez de tabla (ver
+   renderProduccion). Mismo corte que ya usa el resto de la app para pasar a modo celular
+   (menú y filtros colapsables). prodUltimoEsMobile guarda con qué modo se pintó la última
+   vez, para saber si un resize cruzó la frontera tabla/tarjetas y hay que re-pintar. */
+function prodEsMobile(){ return window.innerWidth<=760; }
+let prodUltimoEsMobile=null;
+window.addEventListener('resize', ()=>{
+  if(current!=='produccion') return;
+  prodAjustarStickyOffset();
+  const esMobileAhora=prodEsMobile();
+  if(esMobileAhora!==prodUltimoEsMobile) render();
+});
 
 function prodInput(el, uid, field){
   const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
@@ -7112,12 +7367,46 @@ function prodInputFecha(el, uid){
   const box=document.querySelector('.prod-stats');
   if(box) box.outerHTML=prodStatsHtml();
 }
+/* Campos que se repiten para toda la OT (ot, cliente, comuna) — en la vista de tarjetas se
+   editan una sola vez en la cabecera del grupo y el cambio se aplica a todas las filas de
+   esa OT (data-uids del contenedor, guardado al armar la tarjeta en prodOtGrupoHtml). En la
+   tabla de escritorio cada fila sigue editando su propia OT/cliente/comuna por separado
+   (prodInput arriba) — no se toca ese comportamiento. */
+function prodInputGrupo(el, campo){
+  const cont=el.closest('.prod-ot-group'); if(!cont) return;
+  const uids=(cont.dataset.uids||'').split(',').filter(Boolean);
+  uids.forEach(uid=>{
+    const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
+    r[campo]=el.value; prodMarcarSucio(uid);
+  });
+  saveProduccion();
+}
+function prodInputFechaGrupo(el){
+  const cont=el.closest('.prod-ot-group'); if(!cont) return;
+  const uids=(cont.dataset.uids||'').split(',').filter(Boolean);
+  uids.forEach(uid=>{
+    const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
+    r.fCom=el.value; prodMarcarSucio(uid);
+  });
+  saveProduccion();
+  const d=diasDif(el.value);
+  const wrap=cont.querySelector('.prod-dif-wrap');
+  if(wrap) wrap.innerHTML = d==null? '<span class="muted">—</span>' : `<span class="prod-dif ${d<0?'late':'ok'}">${d}</span>`;
+  const box=document.querySelector('.prod-stats');
+  if(box) box.outerHTML=prodStatsHtml();
+}
 function prodBuscar(v){
   prodBusqueda=v;
-  const tbody=document.querySelector('.prod-table tbody');
-  if(!tbody) return;
   const rows=prodRowsVista();
-  tbody.innerHTML = rows.length? prodFilasHtml(rows) : prodEmptyRowHtml();
+  if(prodEsMobile()){
+    const cont=document.querySelector('.prod-list');
+    if(!cont) return;
+    cont.innerHTML = rows.length? prodFilasHtmlTarjetas(rows) : prodEmptyRowHtmlTarjetas();
+  } else {
+    const tbody=document.querySelector('.prod-table tbody');
+    if(!tbody) return;
+    tbody.innerHTML = rows.length? prodFilasHtml(rows) : prodEmptyRowHtml();
+  }
 }
 function prodCambiarTab(t){ prodTab=t; render(); }
 function prodFiltrarStat(k){ prodStatFiltro=(prodStatFiltro===k? null : k); render(); }
