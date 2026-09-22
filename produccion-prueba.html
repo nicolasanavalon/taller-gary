@@ -378,10 +378,12 @@
   .prod-item textarea.prod-ta{resize:none;overflow-y:auto;height:34px;line-height:1.35;display:block}
   .prod-item textarea.prod-ta.compact{height:24px;padding:3px 6px}
   .prod-item textarea.prod-item-producto{height:auto;min-height:32px}
-  /* Rectángulo (no cuadrado) que se estira al alto disponible del bloque — ver
-     align-items:stretch arriba. El ancho se mantiene angosto a propósito para que se vea
-     como una bandera izada, no como una foto cuadrada de catálogo. */
-  .prod-thumb-cell{width:58px;min-height:64px;border-radius:10px;overflow:hidden;cursor:pointer;border:1px dashed var(--gold-line);
+  /* Tamaño fijo e igual para todas las fotos (antes se estiraban al alto de la fila, y
+     una foto muy vertical como la del asta terminaba mucho más grande que las demás).
+     object-fit:cover recorta cada foto para que quepa igual en este mismo recuadro,
+     sea cual sea su forma original. align-self:flex-start la saca del "stretch" de la
+     fila para que no vuelva a crecer con el alto del bloque. */
+  .prod-thumb-cell{width:64px;height:64px;align-self:flex-start;border-radius:10px;overflow:hidden;cursor:pointer;border:1px dashed var(--gold-line);
     display:flex;align-items:center;justify-content:center;background:#fdfaf3;flex-shrink:0}
   .prod-thumb-cell img{width:100%;height:100%;object-fit:cover;display:block}
   .prod-thumb-cell span{font-size:22px;color:var(--gold-d)}
