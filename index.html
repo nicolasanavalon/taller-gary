@@ -453,6 +453,15 @@
       box-shadow:0 3px 10px rgba(109,74,168,.35)}
     .prod-toggle-mini.letti.on{background:#c9720e;border-color:#9c5709;color:#fff;
       box-shadow:0 3px 10px rgba(201,114,14,.35)}
+    /* Casillero redondo junto al título del producto (solo tarjetas de celular): gris =
+       sin gestionar, verde = ok. Aparte de los botones Subli/Apli/Letti porque es un
+       check rápido de "lo revisé", no una propiedad de la bandera en sí. */
+    .prod-gestion-dot{flex:0 0 auto;width:22px;height:22px;border-radius:50%;
+      border:2px solid var(--line);background:#c7ccd4;cursor:pointer;padding:0;
+      align-self:center;transition:.15s;-webkit-appearance:none;appearance:none}
+    .prod-gestion-dot:hover{border-color:var(--gold-line)}
+    .prod-gestion-dot.on{background:var(--ok);border-color:#157a4b;
+      box-shadow:0 2px 8px rgba(31,157,99,.4)}
     .prod-mini{width:28px;height:28px}
     .prod-subtotal-card{background:var(--gold-soft);border-radius:12px;padding:10px 13px;font-size:12.5px;
       display:flex;justify-content:space-between;gap:10px;font-weight:700;box-shadow:inset 0 0 0 1px var(--gold-line)}
@@ -6619,6 +6628,7 @@ function prodItemCardHtml(r, conOt){
       <div class="prod-info-main">
         <div class="prod-info-top">
           <textarea class="prod-ta prod-item-producto" rows="1" oninput="prodInput(this,'${r.uid}','producto')" placeholder="Producto">${esc(r.producto)}</textarea>
+          <button type="button" class="prod-gestion-dot ${r.gestionado?'on':''}" title="${r.gestionado?'Gestionado':'Sin gestionar'}" onclick="prodToggleFlag('${r.uid}','gestionado')"></button>
           <div class="prod-info-actions">
             <button class="prod-toggle-mini subli ${r.sublimacion?'on':''}" title="Subli" onclick="prodToggleFlag('${r.uid}','sublimacion')">🎨 Subli${r.sublimacion?' ✓':''}</button>
             <button class="prod-toggle-mini apli ${r.aplicada?'on':''}" title="Apli" onclick="prodToggleFlag('${r.uid}','aplicada')">🧵 Apli${r.aplicada?' ✓':''}</button>
