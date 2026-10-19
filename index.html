@@ -7922,15 +7922,74 @@ function prodEliminarFila(uid){
     saveProduccion(); render(); toast('Fila eliminada.');
   });
 }
+/* Reduce la foto a ~480 px de ancho (JPEG) sin cargar la imagen completa como texto:
+   en el celular las fotos de la cámara pesan varios MB y leerlas con FileReader
+   (data URL) más decodificarlas llegaba a quedarse sin memoria y fallar en silencio.
+   Con un URL de objeto el navegador la lee directo del archivo. Si ese camino falla
+   (formato raro), se prueba el camino antiguo antes de rendirse. */
+function prodComprimirFoto(file){
+  return new Promise((resolve, reject)=>{
+    const maxW=480;
+    const dibujar=img=>{
+      const ancho=img.naturalWidth||img.width, alto=img.naturalHeight||img.height;
+      if(!ancho || !alto) throw new Error('la imagen no tiene tamaño válido');
+      const scale=Math.min(1, maxW/ancho);
+      const w=Math.max(1,Math.round(ancho*scale)), h=Math.max(1,Math.round(alto*scale));
+      const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const out=canvas.toDataURL('image/jpeg',0.75);
+      if(!out || out.length<200) throw new Error('no se pudo convertir la imagen');
+      return out;
+    };
+    const viaFileReader=()=>{
+      const rd=new FileReader();
+      rd.onload=()=>{
+        const i2=new Image();
+        i2.onload=()=>{ try{ resolve(dibujar(i2)); }catch(e){ reject(e); } };
+        i2.onerror=()=>reject(new Error('formato de imagen no compatible'));
+        i2.src=rd.result;
+      };
+      rd.onerror=()=>reject(rd.error||new Error('no se pudo leer el archivo'));
+      rd.readAsDataURL(file);
+    };
+    let url=null;
+    try{ url=URL.createObjectURL(file); }catch(e){ viaFileReader(); return; }
+    const img=new Image();
+    img.onload=()=>{
+      try{ resolve(dibujar(img)); }
+      catch(e){ viaFileReader(); }
+      finally{ try{ URL.revokeObjectURL(url); }catch(e){} }
+    };
+    img.onerror=()=>{ try{ URL.revokeObjectURL(url); }catch(e){} viaFileReader(); };
+    img.src=url;
+  });
+}
+/* El selector de archivos queda dentro de la página (oculto) y referenciado: en iPhone,
+   un <input type=file> creado "al vuelo" y sin insertar en la página podía descartarse
+   mientras se elegía la foto, y el cambio nunca llegaba. */
+let prodFotoInput=null;
 function prodSubirFoto(uid){
+  if(prodFotoInput){ try{ prodFotoInput.remove(); }catch(e){} prodFotoInput=null; }
   const input=document.createElement('input'); input.type='file'; input.accept='image/*';
-  input.onchange=()=>{
-    const f=input.files[0]; if(!f) return;
-    comprimirImagen(f, dataUrl=>{
-      const r=PRODUCCION.rows.find(x=>x.uid===uid); if(!r) return;
+  input.style.cssText='position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0';
+  document.body.appendChild(input); prodFotoInput=input;
+  input.addEventListener('change', async ()=>{
+    const f=input.files && input.files[0]; if(!f) return;
+    toast('Procesando foto…');
+    try{
+      const dataUrl=await prodComprimirFoto(f);
+      const r=PRODUCCION.rows.find(x=>x.uid===uid);
+      if(!r){ toast('No se encontró la fila (puede haberse actualizado). Vuelve a intentarlo.','error'); return; }
       r.foto=dataUrl; prodMarcarSucio(uid); saveProduccion(); render();
-    });
-  };
+      toast('Foto agregada ✓');
+    }catch(e){
+      console.error('Error al cargar foto:', e);
+      toast('No se pudo cargar la foto: '+((e&&e.message)||e)+'. Prueba con otra foto o vuelve a intentarlo.','error');
+    } finally {
+      try{ input.remove(); }catch(e){}
+      if(prodFotoInput===input) prodFotoInput=null;
+    }
+  });
   input.click();
 }
 function prodAbrirFoto(uid){
