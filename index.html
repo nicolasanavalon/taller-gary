@@ -8362,9 +8362,10 @@ async function prodVerAnexo(uid, idx){
     const bg=document.createElement('div'); bg.className='confirm-bg';
     bg.innerHTML=`<div class="confirm-box wide hoja-box">
       <div class="ot-doc-head"><b>${esc(a.nombre)}</b><button class="btn ghost sm" id="hvCerrar">Cerrar</button></div>
-      <div class="hoja-scroll">${sheet? prodHojaHtml(sheet) : '<div class="muted" style="padding:20px">No se encontró la hoja.</div>'}</div>
+      <div class="hoja-scroll">${sheet? prodHojaHtml(sheet) : '<div class="muted" style="padding:20px">Esta hoja es más nueva que la versión de la app guardada en este dispositivo. Actualizando… si no se abre sola, cierra y vuelve a abrir la página.</div>'}</div>
     </div>`;
     document.body.appendChild(bg);
+    if(!sheet) appVerificarVersion();
     prodAjustarZoomHoja();
     window.addEventListener('resize', prodAjustarZoomHoja);
     bg.querySelector('#hvCerrar').onclick=()=>{ window.removeEventListener('resize', prodAjustarZoomHoja); bg.remove(); };
@@ -8587,5 +8588,25 @@ ajustarAltoHeader();
 window.addEventListener('resize', ajustarAltoHeader);
 
 /* ============================ INICIO ============================ */
+/* Auto-actualización: el teléfono a veces conserva una copia vieja de la app (caché del navegador)
+   y entonces no conoce las hojas de OT nuevas. Se compara APP_BUILD con el de la versión publicada
+   y, si difiere, se recarga una sola vez saltándose la caché. Se sube APP_BUILD en cada publicación. */
+const APP_BUILD='20261113-1';
+async function appVerificarVersion(){
+  try{
+    const r=await fetch(location.pathname+'?chk='+Date.now(),{cache:'no-store'});
+    if(!r.ok) return false;
+    const t=await r.text();
+    const m=t.match(/const APP_BUILD='([^']+)'/);
+    if(!m || m[1]===APP_BUILD) return false;
+    let ya=null; try{ ya=sessionStorage.getItem('taller_gary_build_reload'); }catch(e){}
+    if(ya===m[1]) return false;
+    try{ sessionStorage.setItem('taller_gary_build_reload', m[1]); }catch(e){}
+    location.replace(location.pathname+'?v='+encodeURIComponent(m[1]));
+    return true;
+  }catch(e){ return false; }
+}
+setTimeout(appVerificarVersion, 1500);
+
 go('produccion');
 </script>
