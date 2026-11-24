@@ -315,6 +315,8 @@
   .prod-table-wrap{position:sticky;top:var(--sticky-off,110px);overflow-x:auto;overflow-y:auto;
     max-height:calc(100vh - var(--sticky-off,110px) - 40px);border-radius:14px;
     box-shadow:inset 0 0 0 1px var(--line);background:#fff}
+  /* Celular (tarjetas): un solo scroll, el de la página — la lista no tiene scroll propio. */
+  .prod-table-wrap.prod-wrap-movil{position:static;overflow:visible;max-height:none;box-shadow:none;background:transparent;border-radius:0}
   table.prod-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1180px}
   .prod-table thead th{position:sticky;top:0;background:#faf7ef;color:var(--muted);font-weight:700;font-size:10.5px;
     text-transform:uppercase;letter-spacing:.3px;text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -7675,7 +7677,7 @@ function renderProduccion(m){
     </div>`:''}
 
     ${prodEsMobile()? `
-    <div class="prod-table-wrap">
+    <div class="prod-table-wrap prod-wrap-movil">
       <div class="prod-list">${rows.length? prodFilasHtmlTarjetas(rows) : prodEmptyRowHtmlTarjetas()}</div>
     </div>
     ` : `
@@ -8745,7 +8747,7 @@ window.addEventListener('resize', ajustarAltoHeader);
 /* Auto-actualización: el teléfono a veces conserva una copia vieja de la app (caché del navegador)
    y entonces no conoce las hojas de OT nuevas. Se compara APP_BUILD con el de la versión publicada
    y, si difiere, se recarga una sola vez saltándose la caché. Se sube APP_BUILD en cada publicación. */
-const APP_BUILD='20261124-6';
+const APP_BUILD='20261124-7';
 async function appVerificarVersion(){
   // Con la app guardada (service worker), él mismo baja la versión publicada y avisa si cambió:
   // así no se descarga la página completa dos veces.
