@@ -7239,7 +7239,7 @@ let PRODUCCION = loadProduccion();
 // (localStorage) sirve de vista instantánea mientras se trae lo real de la nube arriba.
 prodAdoptarCopiaIdb();
 prodSincronizarAhora(true);
-let prodCompacto=localStorage.getItem('taller_gary_prod_compacto')==='1'; // oculta título+stats (y logo+menú) para que la tabla use toda la pantalla
+let prodCompacto=localStorage.getItem('taller_gary_prod_compacto')!=='0'; // por defecto oculto (se muestra con "Mostrar título y estadísticas"); // oculta título+stats (y logo+menú) para que la tabla use toda la pantalla
 function prodToggleCompacto(){
   prodCompacto=!prodCompacto;
   localStorage.setItem('taller_gary_prod_compacto', prodCompacto?'1':'0');
@@ -8746,8 +8746,11 @@ window.addEventListener('resize', ajustarAltoHeader);
 /* Auto-actualización: el teléfono a veces conserva una copia vieja de la app (caché del navegador)
    y entonces no conoce las hojas de OT nuevas. Se compara APP_BUILD con el de la versión publicada
    y, si difiere, se recarga una sola vez saltándose la caché. Se sube APP_BUILD en cada publicación. */
-const APP_BUILD='20261124-3';
+const APP_BUILD='20261124-4';
 async function appVerificarVersion(){
+  // Con la app guardada (service worker), él mismo baja la versión publicada y avisa si cambió:
+  // así no se descarga la página completa dos veces.
+  if(navigator.serviceWorker && navigator.serviceWorker.controller) return false;
   try{
     const r=await fetch(location.pathname+'?chk='+Date.now(),{cache:'no-store'});
     if(!r.ok) return false;
@@ -8760,6 +8763,32 @@ async function appVerificarVersion(){
     location.replace(location.pathname+'?v='+encodeURIComponent(m[1]));
     return true;
   }catch(e){ return false; }
+}
+// App guardada en el teléfono: abre al instante con la copia guardada y se pone al día sola.
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  navigator.serviceWorker.addEventListener('message', ev=>{
+    const b=ev.data && ev.data.nuevaVersion;
+    if(!b || b===APP_BUILD) return;
+    let ya=null; try{ ya=sessionStorage.getItem('taller_gary_build_reload'); }catch(e){}
+    if(ya===b) return;
+    try{ sessionStorage.setItem('taller_gary_build_reload', b); }catch(e){}
+    location.reload();   // la copia guardada ya es la nueva
+  });
+  // Por si el aviso llegó antes de que la página estuviera lista: revisar la versión que dejó guardada.
+  const revisarGuardada=async()=>{
+    try{
+      const r=await (await caches.open('taller-gary-app')).match(new URL('build.txt', location.href.replace(/[?#].*$/,'')).href);
+      const b=r? (await r.text()).trim() : '';
+      if(!b || b===APP_BUILD) return;
+      let ya=null; try{ ya=sessionStorage.getItem('taller_gary_build_reload'); }catch(e){}
+      if(ya===b) return;
+      try{ sessionStorage.setItem('taller_gary_build_reload', b); }catch(e){}
+      location.reload();
+    }catch(e){}
+  };
+  setTimeout(revisarGuardada, 4000);
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') setTimeout(revisarGuardada, 4000); });
 }
 setTimeout(appVerificarVersion, 1500);
 
