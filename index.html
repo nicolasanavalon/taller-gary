@@ -702,7 +702,6 @@
 
 <nav id="nav"></nav>
 <main id="app"></main>
-<footer>Sistema de gestión Taller Gary · versión inicial (interfaz). Los módulos se irán desarrollando según necesidad.</footer>
 
 <script>/* Misma URL que PROD_SYNC_URL: arranca la descarga de Producción desde ya, en paralelo al resto de la página. */
 window.__prodPreCtl=new AbortController(); setTimeout(function(){ window.__prodPreCtl.abort(); },60000);
@@ -8746,7 +8745,7 @@ window.addEventListener('resize', ajustarAltoHeader);
 /* Auto-actualización: el teléfono a veces conserva una copia vieja de la app (caché del navegador)
    y entonces no conoce las hojas de OT nuevas. Se compara APP_BUILD con el de la versión publicada
    y, si difiere, se recarga una sola vez saltándose la caché. Se sube APP_BUILD en cada publicación. */
-const APP_BUILD='20261124-5';
+const APP_BUILD='20261124-6';
 async function appVerificarVersion(){
   // Con la app guardada (service worker), él mismo baja la versión publicada y avisa si cambió:
   // así no se descarga la página completa dos veces.
