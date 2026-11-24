@@ -2,11 +2,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- App en la pantalla de inicio (iPhone, Android y computador) -->
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icono-180.png">
-<link rel="icon" type="image/png" href="icono-192.png">
+<link rel="apple-touch-icon" href="icono-gary-180.png">
+<link rel="icon" type="image/png" href="icono-gary-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Taller Gary">
+<meta name="apple-mobile-web-app-title" content="Gary">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#b8860b">
 <title>Taller Gary · Sistema de Gestión</title>
@@ -8746,7 +8746,7 @@ window.addEventListener('resize', ajustarAltoHeader);
 /* Auto-actualización: el teléfono a veces conserva una copia vieja de la app (caché del navegador)
    y entonces no conoce las hojas de OT nuevas. Se compara APP_BUILD con el de la versión publicada
    y, si difiere, se recarga una sola vez saltándose la caché. Se sube APP_BUILD en cada publicación. */
-const APP_BUILD='20261124-4';
+const APP_BUILD='20261124-5';
 async function appVerificarVersion(){
   // Con la app guardada (service worker), él mismo baja la versión publicada y avisa si cambió:
   // así no se descarga la página completa dos veces.
